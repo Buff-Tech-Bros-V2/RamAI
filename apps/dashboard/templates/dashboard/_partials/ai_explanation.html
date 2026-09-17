@@ -17,8 +17,10 @@
               hx-swap="outerHTML"
               hx-indicator="#ai-loading, .ai-analyze-form">
             {% csrf_token %}
-            {# The explanation must describe the same scenario shown on screen,
-               so the active what-if values ride along with the request. #}
+            {% comment %}
+            The explanation must describe the same scenario shown on screen,
+            so the active what-if values ride along with the request.
+            {% endcomment %}
             <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|default_if_none:'' }}">
             <input type="hidden" name="capital" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit }}">
             <input type="hidden" name="window_hours" value="{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }}">
