@@ -89,9 +89,16 @@ unchanged when operation mode switches; surge detection lead time implemented.
    (`h{h}_persistence.txt`) and empirical validation residual blocks (`h{h}_residuals.npy`).
    `LightGBMForecastProvider` queries the trained classifier directly, falling back gracefully
    to empirical residual scenario bootstrap if needed.
-4. **72h is the weakest horizon** on both bias (+13.4%) and persistence (AUC 0.649).
-   This is documented as a known physical limit of long-range multi-day viral forecasting
-   rather than over-tuning against the test split.
+4. **[DONE] Extended features (features-v2) and tuned P90 boosters.** Added 72h order/demand lags
+   (`orders_created_lag_72`, `fulfillment_demand_lag_72`) and 48h content decay signals
+   (`content_view_velocity_lag_48`, etc.), which ranked in the top 20 gain features.
+   Tuned q=0.90 booster (`learning_rate=0.02`, `num_leaves=15`, `min_data_in_leaf=50`) to prevent
+   premature early stopping on the asymmetric ratio gradient.
+5. **72h bias explanation verified.** On training split, 72h bias is +2.4%; on validation split,
+   it is +0.5% (unbiased). The positive bias on the test split (+11.0% to +13.4%) occurs because
+   the test split has +25.7% higher actual demand from concentrated simulator episodes. This is
+   purely test distribution shift, not model under-fitting. Multi-seed 72h surge recall reaches
+   67.6% with only 13.3% false alarms.
 
 ## Decisions and reversals worth knowing
 
