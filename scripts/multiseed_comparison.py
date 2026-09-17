@@ -30,13 +30,12 @@ from sklearn.metrics import roc_auc_score
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from apps.forecasting import evaluation
 from apps.forecasting.features import (  # noqa: E402
-    MODE_CONTENT, MODE_TRANSACTION, build_training_frame, load_observations,
+    HORIZONS, MODE_CONTENT, MODE_TRANSACTION, build_training_frame, load_observations,
 )
 from apps.forecasting.quantile_model import train_bundle  # noqa: E402
-from scripts.evaluate_persistence import PARAMS, baseline_hourly_series  # noqa: E402
 
-HORIZONS = (24, 48, 72)
 MODES = (MODE_TRANSACTION, MODE_CONTENT)
 THRESHOLD = 1.2
 
@@ -49,16 +48,40 @@ def generate(seed: int, out: Path) -> None:
     )
 
 
-def point_accuracy(obs, labels, seed: int) -> list[dict]:
+def evaluate_seed(obs, labels, truth, seed: int) -> list[dict]:
+    base_series = evaluation.baseline_hourly_series(obs)
     rows = []
     for mode in MODES:
         bundle = train_bundle(obs, labels, feature_mode=mode, verbose=False)
         for h in HORIZONS:
             X, y, meta = build_training_frame(obs, labels, horizon=h, feature_mode=mode)
             te = (meta["split"] == "test").to_numpy()
-            actual = y.to_numpy()[te]
-            pred = bundle.predict(X[te], horizon=h)
+            X_te, y_te, meta_te = X[te], y[te], meta[te].reset_index(drop=True)
+            actual = y_te.to_numpy()
+            pred = bundle.predict(X_te, horizon=h)
             err = actual - pred["p50"].to_numpy()
+
+            ref = evaluation.baseline_cumulative_reference(meta_te, base_series, h)
+            is_surge = evaluation.label_surge_rows(meta_te, truth)
+            s_metrics = evaluation.surge_detection_metrics(
+                actual, pred["p50"], is_surge, alarm_ratio=THRESHOLD, reference=ref
+            )
+            lt_res = evaluation.surge_detection_lead_time(
+                truth, meta_te, pred["p50"], ref, alarm_ratio=THRESHOLD
+            )
+
+            p_auc = float("nan")
+            base_rate = float("nan")
+            if bundle.has_persistence(h):
+                meta_base = meta_te.merge(base_series, on=["timestamp", "sku_id"], how="left")
+                rate = actual / h
+                base_val = meta_base["baseline_hourly"].to_numpy(dtype=float)
+                persist_label = (rate >= THRESHOLD * base_val).astype(int)
+                ok = np.isfinite(base_val) & (base_val > 0)
+                prob = bundle.predict_persistence(X_te, h).to_numpy()
+                p_auc = float(roc_auc_score(persist_label[ok], prob[ok]))
+                base_rate = float(persist_label[ok].mean())
+
             rows.append({
                 "seed": seed, "mode": mode, "horizon": h, "n": int(te.sum()),
                 "wape": float(np.abs(err).sum() / actual.sum()),
@@ -66,34 +89,16 @@ def point_accuracy(obs, labels, seed: int) -> list[dict]:
                 "bias_pct": float(err.mean() / actual.mean() * 100),
                 "coverage": float(np.mean((actual >= pred["p10"].to_numpy())
                                           & (actual <= pred["p90"].to_numpy()))),
-            })
-    return rows
-
-
-def persistence(obs, labels, seed: int) -> list[dict]:
-    base = baseline_hourly_series(obs)
-    rows = []
-    for mode in MODES:
-        for h in HORIZONS:
-            X, y, meta = build_training_frame(obs, labels, horizon=h, feature_mode=mode)
-            meta = meta.merge(base, on=["timestamp", "sku_id"], how="left")
-            rate = y.to_numpy() / h
-            label = (rate >= THRESHOLD * meta["baseline_hourly"].to_numpy()).astype(int)
-            ok = (np.isfinite(meta["baseline_hourly"].to_numpy())
-                  & (meta["baseline_hourly"] > 0).to_numpy())
-            X, label, meta = X[ok], label[ok], meta[ok].reset_index(drop=True)
-            tr = (meta["split"] == "train").to_numpy()
-            va = (meta["split"] == "val").to_numpy()
-            te = (meta["split"] == "test").to_numpy()
-            booster = lgb.train(
-                PARAMS, lgb.Dataset(X[tr], label=label[tr]), num_boost_round=600,
-                valid_sets=[lgb.Dataset(X[va], label=label[va])],
-                callbacks=[lgb.early_stopping(50, verbose=False)],
-            )
-            rows.append({
-                "seed": seed, "mode": mode, "horizon": h,
-                "auc": float(roc_auc_score(label[te], booster.predict(X[te]))),
-                "base_rate": float(label[te].mean()),
+                "auc": p_auc,
+                "base_rate": base_rate,
+                "surge_recall": s_metrics["recall"],
+                "surge_false_alarm": s_metrics["false_alarm_rate"],
+                "surge_precision": s_metrics["precision"],
+                "surge_f1": s_metrics["f1"],
+                "lead_time_median": lt_res["median_lead_time_hours"],
+                "lead_time_mean": lt_res["mean_lead_time_hours"],
+                "episodes_detected": lt_res["detected_episodes"],
+                "episodes_total": lt_res["total_episodes"],
             })
     return rows
 
@@ -112,36 +117,37 @@ def main() -> None:
     ap.add_argument("--out", default="artifacts/multiseed_comparison.csv")
     args = ap.parse_args()
 
-    acc_rows, per_rows = [], []
+    rows = []
     workdir = Path(tempfile.mkdtemp(prefix="viralcast_seeds_"))
     try:
         for seed in args.seeds:
             data = workdir / f"seed_{seed}"
-            print(f"[seed {seed}] generating ...", flush=True)
+            print(f"[seed {seed}] generating data ...", flush=True)
             generate(seed, data)
             obs = load_observations(data / "hourly_observations.parquet")
             labels = pd.read_parquet(data / "training_labels.parquet")
-            print(f"[seed {seed}] point accuracy ...", flush=True)
-            acc_rows += point_accuracy(obs, labels, seed)
-            print(f"[seed {seed}] persistence ...", flush=True)
-            per_rows += persistence(obs, labels, seed)
+            truth = pd.read_csv(data / "latent_truth.csv", parse_dates=["timestamp"])
+            truth["timestamp"] = pd.to_datetime(truth["timestamp"], utc=True).dt.tz_convert(
+                obs["timestamp"].dt.tz
+            )
+            print(f"[seed {seed}] evaluating models ...", flush=True)
+            rows += evaluate_seed(obs, labels, truth, seed)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
-    acc = pd.DataFrame(acc_rows)
-    per = pd.DataFrame(per_rows)
+    df = pd.DataFrame(rows)
 
     print("\n" + "=" * 78)
     print(f"POINT ACCURACY -- mean over {len(args.seeds)} seeds {args.seeds}")
     print("=" * 78)
-    print(acc.groupby(["horizon", "mode"])[["wape", "bias", "bias_pct", "coverage"]]
+    print(df.groupby(["horizon", "mode"])[["wape", "bias", "bias_pct", "coverage"]]
           .mean().round(3).to_string())
 
     print("\n" + "=" * 78)
     print("CONTENT LIFT (negative WAPE % = content better; positive AUC = content better)")
     print("=" * 78)
-    w = lift_table(acc, "wape", higher_is_better=False)
-    a = lift_table(per, "auc", higher_is_better=True)
+    w = lift_table(df, "wape", higher_is_better=False)
+    a = lift_table(df, "auc", higher_is_better=True)
     print("\nWAPE change, % (per seed):")
     print(w.round(2).to_string())
     print("\n  mean:", {h: round(float(w[h].mean()), 2) for h in HORIZONS})
@@ -149,12 +155,15 @@ def main() -> None:
     print(a.round(3).to_string())
     print("\n  mean:", {h: round(float(a[h].mean()), 3) for h in HORIZONS})
 
-    print("\nPersistence AUC by mode:")
-    print(per.groupby(["horizon", "mode"])[["auc", "base_rate"]].mean().round(3).to_string())
+    print("\n" + "=" * 78)
+    print("SURGE DETECTION METRICS (mean over seeds)")
+    print("=" * 78)
+    print(df.groupby(["horizon", "mode"])[["surge_recall", "surge_false_alarm", "surge_precision", "surge_f1", "lead_time_median"]]
+          .mean().round(3).to_string())
 
     out = ROOT / args.out
     out.parent.mkdir(parents=True, exist_ok=True)
-    acc.merge(per, on=["seed", "mode", "horizon"], how="outer").to_csv(out, index=False)
+    df.to_csv(out, index=False)
     print(f"\nWrote {out}")
 
 
