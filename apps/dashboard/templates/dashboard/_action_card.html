@@ -2,23 +2,49 @@
 <div class="col">
     <div class="card h-100 {% if is_recommended %}border-primary border-2 shadow-sm{% endif %}">
         <div class="card-body">
-            <h5 class="card-title d-flex justify-content-between align-items-start">
+            <h5 class="card-title d-flex justify-content-between align-items-start mb-1">
                 <span>
-                    {% if candidate.action == "COMMIT_NOW" %}Commit Sekarang
-                    {% elif candidate.action == "STAGED_COMMITMENT" %}Commit Bertahap
+                    {% if candidate.action == "COMMIT_NOW" %}Beli/Produksi Banyak Sekarang
+                    {% elif candidate.action == "STAGED_COMMITMENT" %}Sedikit Dulu, Tambah Nanti
                     {% else %}Tunggu Dulu{% endif %}
                 </span>
-                {% if is_recommended %}<span class="badge text-bg-primary">Rekomendasi</span>{% endif %}
+                {% if is_recommended %}<span class="badge text-bg-primary ms-1">Rekomendasi</span>{% endif %}
             </h5>
+            <p class="text-muted small mb-3">
+                {% if candidate.action == "COMMIT_NOW" %}
+                    Aman dari kehabisan stok, tapi modal keluar besar dari awal.
+                {% elif candidate.action == "STAGED_COMMITMENT" %}
+                    Modal lebih kecil dulu, nambah lagi kalau ramainya kebukti beneran.
+                {% else %}
+                    Hemat modal sekarang, tapi risiko kehabisan stok kalau ternyata masih ramai.
+                {% endif %}
+            </p>
             <ul class="list-unstyled small mb-0">
-                <li>Commit sekarang: <strong>{{ candidate.commit_now_units }} unit</strong></li>
-                <li>Commit susulan: <strong>{{ candidate.commit_later_units }} unit</strong></li>
-                <li>Evaluasi ulang: {{ candidate.reevaluate_at|date:"d M H:i" }}</li>
-                <li>Modal dibutuhkan: Rp{{ candidate.required_capital|floatformat:0|intcomma }}</li>
-                <li>Expected contribution: Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}</li>
-                <li>Fill rate: {{ candidate.expected_fill_rate|floatformat:2 }}</li>
-                <li>Lost sales: {{ candidate.expected_lost_units }} unit</li>
-                <li>Residual-stock risk: {{ candidate.residual_stock_risk_units }} unit</li>
+                <li class="mb-2">
+                    <div>Beli/produksi sekarang: <strong>{{ candidate.commit_now_units }} unit</strong></div>
+                    <div>Nyusul nanti: <strong>{{ candidate.commit_later_units }} unit</strong></div>
+                    <div class="text-muted">Cek lagi kondisi pada {{ candidate.reevaluate_at|date:"d M, H:i" }}</div>
+                </li>
+                <li class="mb-2">
+                    <div>Modal yang harus dikeluarkan</div>
+                    <div class="fs-5">Rp{{ candidate.required_capital|floatformat:0|intcomma }}</div>
+                </li>
+                <li class="mb-2">
+                    <div>Estimasi untung bersih <span class="text-muted">(expected contribution)</span></div>
+                    <div class="fs-5">Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}</div>
+                </li>
+                <li class="mb-1">
+                    <span class="text-muted">Persen pembeli yang kebagian barang:</span>
+                    <strong>{% widthratio candidate.expected_fill_rate 1 100 %}%</strong>
+                </li>
+                <li class="mb-1">
+                    <span class="text-muted">Penjualan hilang karena stok kurang:</span>
+                    <strong>{{ candidate.expected_lost_units }} unit</strong>
+                </li>
+                <li>
+                    <span class="text-muted">Barang berpotensi nyisa gak kejual:</span>
+                    <strong>{{ candidate.residual_stock_risk_units }} unit</strong>
+                </li>
             </ul>
         </div>
     </div>

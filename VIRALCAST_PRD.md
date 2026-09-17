@@ -414,9 +414,8 @@ flowchart TD
 
 - Python, Pandas, LightGBM atau XGBoost;
 - OR-Tools, PuLP, atau enumerasi kandidat;
-- FastAPI untuk tool endpoints jika diperlukan;
-- Streamlit untuk MVP tercepat;
-- SQLite atau Parquet untuk data demo;
+- Django untuk dashboard, tool orchestration, dan admin data demo;
+- SQLite untuk data demo;
 - LLM untuk explanation layer dengan schema-validated input.
 
 ## 15. UX requirements
@@ -544,7 +543,7 @@ Juri mengubah operation mode, lead time, commitment deadline, atau kapasitas. Si
 | Jam 3-7 | Baseline serta transaction and content models |
 | Jam 7-11 | Quantile forecast, scenarios, dan forecast evaluation |
 | Jam 11-15 | Decision engine dan constraints |
-| Jam 15-19 | Streamlit dashboard end-to-end |
+| Jam 15-19 | Django dashboard end-to-end |
 | Jam 19-21 | Agent orchestration dan fallback states |
 | Jam 21-24 | Testing, baseline comparison, rehearsal, dan backup video |
 

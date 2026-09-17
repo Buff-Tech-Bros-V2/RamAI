@@ -5,8 +5,8 @@
 
 <form method="get" class="row g-2 align-items-end mb-4">
     <div class="col-auto">
-        <label class="form-label mb-0">SKU</label>
-        <select name="sku" class="form-select" onchange="this.form.submit()">
+        <label class="form-label mb-0" for="sku-select">Pilih produk (SKU)</label>
+        <select id="sku-select" name="sku" class="form-select" onchange="this.form.submit()">
             {% for s in skus %}
                 <option value="{{ s.sku_id }}" {% if s.sku_id == selected_sku_id %}selected{% endif %}>
                     {{ s.sku_id }} - {{ s.name }}
@@ -21,6 +21,13 @@
         Belum ada data SKU. Jalankan <code>python manage.py seed_dummy_data</code> lalu refresh halaman ini.
     </div>
 {% else %}
+
+    <div class="alert alert-secondary small mb-3">
+        <strong>Cara baca halaman ini:</strong> order produk ini lagi naik. Sistem menebak apakah
+        kenaikannya bakal lanjut atau reda, lalu menyodorkan 3 pilihan &mdash; beli/produksi banyak
+        sekarang, sedikit dulu baru tambah, atau tunggu dulu &mdash; lengkap dengan modal dan risikonya
+        masing-masing. Kamu yang mutusin, sistem cuma bantu ngitung.
+    </div>
 
     <div class="d-flex justify-content-between align-items-center mb-2">
         <div>
@@ -53,29 +60,29 @@
         </div>
         <div class="col-sm-3">
             <div class="border rounded p-3 bg-white h-100">
-                <div class="text-muted small">Operation mode / profile</div>
+                <div class="text-muted small">Jenis kegiatan</div>
                 <div class="fs-6">{{ decision_config.operation_mode }}</div>
                 <div class="fs-6 text-muted">{{ decision_config.constraint_profile }}</div>
             </div>
         </div>
         <div class="col-sm-3">
             <div class="border rounded p-3 bg-white h-100">
-                <div class="text-muted small">Commitment deadline</div>
+                <div class="text-muted small">Batas waktu ambil keputusan</div>
                 <div class="fs-6">{{ decision_config.commitment_deadline|date:"d M Y H:i" }}</div>
             </div>
         </div>
         <div class="col-sm-3">
             <div class="border rounded p-3 bg-white h-100">
-                <div class="text-muted small">Surge persistence (48h)</div>
-                <div class="fs-4">{{ result.decision.surge_persistence_48h|floatformat:2 }}</div>
-                <div class="fs-6 text-muted">Confidence: {{ result.decision.confidence }}</div>
+                <div class="text-muted small">Kemungkinan rame lanjut 48 jam ke depan</div>
+                <div class="fs-4">{% widthratio result.decision.surge_persistence_48h 1 100 %}%</div>
+                <div class="fs-6 text-muted">Keyakinan sistem: {{ result.decision.confidence }}</div>
             </div>
         </div>
     </div>
 
     <div class="row g-4 mb-4">
         <div class="col-md-6">
-            <h5>Actual order (24 jam terakhir)</h5>
+            <h5>Order asli (24 jam terakhir)</h5>
             <div class="table-responsive" style="max-height: 320px; overflow-y: auto;">
                 <table class="table table-sm table-striped bg-white">
                     <thead><tr><th>Jam</th><th class="text-end">Orders</th><th class="text-end">Stok</th><th>Stockout</th></tr></thead>
@@ -93,13 +100,13 @@
             </div>
         </div>
         <div class="col-md-6">
-            <h5>Forecast cumulative fulfillment demand</h5>
+            <h5>Tebakan total order ke depan</h5>
             <table class="table table-sm table-striped bg-white">
-                <thead><tr><th>Horizon</th><th class="text-end">P10</th><th class="text-end">P50</th><th class="text-end">P90</th></tr></thead>
+                <thead><tr><th>Sampai</th><th class="text-end">Pesimis</th><th class="text-end">Wajar</th><th class="text-end">Optimis</th></tr></thead>
                 <tbody>
                 {% for f in result.forecasts %}
                     <tr>
-                        <td>{{ f.horizon_hours }} jam</td>
+                        <td>{{ f.horizon_hours }} jam lagi</td>
                         <td class="text-end">{{ f.p10 }}</td>
                         <td class="text-end">{{ f.p50 }}</td>
                         <td class="text-end">{{ f.p90 }}</td>
@@ -108,13 +115,15 @@
                 </tbody>
             </table>
             <div class="small text-muted">
-                Model: {{ result.forecast_48h.model_name }} ({{ result.forecast_48h.model_version }})
-                &mdash; <em>placeholder, belum model regresi asli.</em>
+                "Wajar" dipakai sebagai perkiraan utama; "pesimis" dan "optimis" nunjukin rentang
+                kalau tebakannya meleset. Model: {{ result.forecast_48h.model_name }}
+                ({{ result.forecast_48h.model_version }}) &mdash;
+                <em>placeholder, belum model regresi asli.</em>
             </div>
         </div>
     </div>
 
-    <h5>Alternatif keputusan</h5>
+    <h5>Pilihan tindakan</h5>
     <div class="row row-cols-1 row-cols-md-3 g-3 mb-4">
         {% include "dashboard/_action_card.html" with candidate=result.decision.recommended is_recommended=True %}
         {% for alt in result.decision.alternatives %}
@@ -124,46 +133,47 @@
 
     <div class="row g-4 mb-4">
         <div class="col-md-7">
-            <h5>Penjelasan agent</h5>
+            <h5>Penjelasan sistem, dalam bahasa manusia</h5>
             <div class="border rounded p-3 bg-white" style="white-space: pre-wrap;">{{ result.explanation_text }}</div>
-            <div class="small text-muted mt-1"><em>Placeholder explainer: mengisi template dari angka packet, belum LLM asli.</em></div>
+            <div class="small text-muted mt-1"><em>Placeholder: mengisi template dari angka di atas, belum LLM asli.</em></div>
         </div>
         <div class="col-md-5">
-            <h5>What-if</h5>
+            <h5>Coba ubah kondisinya (opsional)</h5>
+            <p class="small text-muted">Misalnya modal lebih terbatas, atau deadline dimajukan &mdash; sistem hitung ulang rekomendasinya.</p>
             <form method="get" class="border rounded p-3 bg-white mb-3">
                 <input type="hidden" name="sku" value="{{ sku.sku_id }}">
                 <div class="mb-2">
-                    <label class="form-label small mb-0">Kapasitas (menit/hari)</label>
-                    <input type="number" name="capacity_minutes" class="form-control form-control-sm"
+                    <label class="form-label small mb-0" for="wf-capacity">Kapasitas produksi (menit/hari)</label>
+                    <input id="wf-capacity" type="number" name="capacity_minutes" class="form-control form-control-sm"
                            value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes }}">
                 </div>
                 <div class="mb-2">
-                    <label class="form-label small mb-0">Modal kerja (Rp)</label>
-                    <input type="number" name="capital" class="form-control form-control-sm"
+                    <label class="form-label small mb-0" for="wf-capital">Modal kerja yang tersedia (Rp)</label>
+                    <input id="wf-capital" type="number" name="capital" class="form-control form-control-sm"
                            value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit }}">
                 </div>
                 <div class="mb-2">
-                    <label class="form-label small mb-0">Commitment deadline</label>
-                    <input type="datetime-local" name="deadline" class="form-control form-control-sm"
+                    <label class="form-label small mb-0" for="wf-deadline">Batas waktu ambil keputusan</label>
+                    <input id="wf-deadline" type="datetime-local" name="deadline" class="form-control form-control-sm"
                            value="{{ decision_config.commitment_deadline|date:'Y-m-d\TH:i' }}">
                 </div>
-                <button type="submit" class="btn btn-sm btn-outline-primary">Hitung ulang</button>
+                <button type="submit" class="btn btn-sm btn-outline-primary">Hitung ulang rekomendasi</button>
             </form>
 
             <form method="post" action="{% url 'dashboard:approve_plan' sku.sku_id %}">
                 {% csrf_token %}
                 <button type="submit" class="btn btn-primary w-100">
-                    Setujui rekomendasi (buat draf rencana)
+                    Setuju, catat sebagai rencana
                 </button>
             </form>
-            <div class="small text-muted mt-1">MVP tidak mengeksekusi pembelian/produksi otomatis.</div>
+            <div class="small text-muted mt-1">Ini cuma nyimpen catatan persetujuan &mdash; belum benar-benar belanja/produksi otomatis.</div>
         </div>
     </div>
 
-    <h5>Asumsi &amp; data quality</h5>
+    <h5>Asumsi yang dipakai &amp; catatan kelengkapan data</h5>
     <ul class="small">
         {% for a in result.decision.assumptions %}<li>{{ a }}</li>{% endfor %}
-        {% for f in result.forecast_48h.data_quality_flags %}<li>Data quality flag: {{ f }}</li>{% endfor %}
+        {% for f in result.forecast_48h.data_quality_flags %}<li>Catatan data: {{ f }}</li>{% endfor %}
     </ul>
 
     {% if drafts %}
