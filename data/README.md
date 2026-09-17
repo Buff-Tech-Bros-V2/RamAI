@@ -80,19 +80,70 @@ Feature code must handle all-null content and set a `content_features_used` flag
 
 ## What the models found on this data
 
-Multi-seed (3 seeds) test-split results, transaction-only vs transaction-plus-content:
+Reproduce with `python scripts/multiseed_comparison.py --seeds 42 7 13 101 202 303 404 505`.
+Everything below is the mean over those **8 dataset seeds**, not one run -- the per-seed
+spread is wide enough that a single seed has twice pointed the opposite way.
 
-| Content lift | 24h | 48h | 72h |
+### Content features help, on both questions
+
+| Content lift (8-seed mean) | 24h | 48h | 72h |
 | --- | --- | --- | --- |
-| Point accuracy (WAPE) | −6.4% | −3.6% | +4.0% |
-| Surge persistence (AUC) | +0.062 | +0.030 | −0.064 |
+| Point accuracy (WAPE change) | **-7.4%** | **-6.7%** | **-7.1%** |
+| Surge persistence (AUC delta) | **+0.097** | **+0.091** | +0.048 |
 
-**Content features do not clearly help on this data.** The one consistent effect across
-every version of the dataset is that content *hurts* short-horizon point accuracy: with
-an 8–40 h conversion lag, a spike visible now has not converted inside 24 h, and the
-model over-reacts to it.
+Persistence AUC by mode: 24h 0.723 -> 0.820, 48h 0.614 -> 0.704, 72h 0.601 -> 0.649.
+WAPE favours content in 7 of 8 seeds at 24h and 48h, 6 of 8 at 72h. The 72h persistence
+delta is the weakest of the six numbers -- treat 72h persistence as unproven.
 
-An earlier run on a more heavily censored dataset showed a large persistence gain
-(AUC +0.229 at 48 h). That did not survive fixing the censoring rate — it came from
-1.2k-row test sets shrinking to 0.5k under selection. Treat any content advantage as
-unproven until it holds on a larger test set.
+**Seed 42 -- the dataset committed in this folder -- is the single most
+content-unfavourable of the eight.** On seed 42 alone content looks neutral-to-harmful
+(+4.3% WAPE at 24h). Do not quote seed 42 on its own as evidence either way.
+
+### This reverses an earlier finding, because the model changed
+
+An earlier version of this file reported that content did **not** help and actively hurt
+24h accuracy (-6.4%). That was measured against a model trained on the **absolute**
+demand count. It was a real measurement of a worse model, not noise.
+
+The quantile models now fit a **ratio target** -- demand divided by the trailing level --
+and that is what changed the answer. On an absolute target the model had to turn a content
+spike into a unit count and consistently overshot; on the ratio scale the same signal says
+"this is running 3x normal", which is the scale a leading indicator naturally lives on.
+The mechanism and the reversal are both worth stating out loud rather than quietly
+presenting the new number.
+
+### Point accuracy against the baselines
+
+Single-seed (42) test split, served content model vs baselines -- `artifacts/test_comparison.csv`:
+
+| WAPE | 24h | 48h | 72h |
+| --- | --- | --- | --- |
+| seasonal_naive | 0.433 | 0.405 | 0.386 |
+| moving_average | 0.347 | 0.331 | 0.310 |
+| transaction | 0.278 | 0.298 | 0.273 |
+| transaction_content | 0.290 | 0.298 | 0.274 |
+
+The models beat both baselines at every horizon, including 72h where an earlier
+absolute-target model lost to a plain moving average.
+
+### Under-forecast bias is reduced, not eliminated
+
+Bias is `mean(actual - predicted)`, so positive means under-forecasting. The ratio target
+cut it roughly in half (8-seed mean, served content model): **+8.5% / +10.5% / +13.4%**
+at 24/48/72h, from +18% / +25% / +27% under the absolute target.
+
+What remains is not model error. On seed 42 the model is close to unbiased on the data it
+was fitted and validated on (+4.1% train, +5.2% val at 24h) and only runs light on test
+(+9.2%), because the test window genuinely runs hotter than the training period -- raw
+hourly demand 5.10 there against 3.63 in train, which is where the forced conflict surges
+sit. A multiplicative correction fitted on validation would not help, since validation is
+already unbiased; one fitted on test would be cheating. **Expect this model to run ~10%
+light during an unusually hot period.**
+
+### Intervals are conformalised
+
+Raw quantile boosters covered only 72-76% inside a nominal 80% P10-P90 band, which would
+have left the decision engine short on safety stock. Each bundle stores a split-conformal
+width correction per horizon, fitted on validation only. Seed 42 test coverage is
+0.82 / 0.81 / 0.87; the 8-seed mean is ~0.76, so the band is still slightly optimistic
+on average.
