@@ -66,6 +66,7 @@
             {% if rec.required_material %}<div><span>Kebutuhan material</span><strong>{{ rec.required_material|floatformat:"-2" }}</strong></div>{% endif %}
         </div>
         <div class="recommendation-footer">
+            {% if user.is_authenticated %}
             <form method="post" action="{% url 'dashboard:approve_plan' sku.sku_id %}">
                 {% csrf_token %}
                 <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|default_if_none:'' }}">
@@ -73,6 +74,9 @@
                 <input type="hidden" name="window_hours" value="{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }}">
                 <button type="submit" class="ram-btn ram-btn-primary ram-btn-lg">Setujui dan simpan rencana</button>
             </form>
+            {% else %}
+            <a href="{% url 'login' %}?next={% url 'dashboard:decision_center' sku.sku_id %}" class="ram-btn ram-btn-primary ram-btn-lg">Login untuk menyetujui</a>
+            {% endif %}
             <span>Evaluasi ulang {{ rec.reevaluate_at|date:"d M, H:i" }}</span>
         </div>
     </article>

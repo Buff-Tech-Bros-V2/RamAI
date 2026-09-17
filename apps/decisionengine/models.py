@@ -5,6 +5,7 @@ real purchase/production order, it only records that a human approved a
 recommendation snapshot.
 """
 
+from django.conf import settings
 from django.db import models
 
 from apps.skus.models import SKU
@@ -13,6 +14,13 @@ from apps.skus.models import SKU
 class ActionPlanDraft(models.Model):
     sku = models.ForeignKey(SKU, on_delete=models.CASCADE, related_name="action_plan_drafts")
     approved_at = models.DateTimeField(auto_now_add=True)
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_plans",
+    )
     recommended_action = models.CharField(max_length=32)
     commit_now_units = models.IntegerField()
     commit_later_units = models.IntegerField()
