@@ -13,7 +13,7 @@
     </div>
     <div class="attention-meta">
         <span class="status-pill status-warning">Perlu keputusan</span>
-        <span class="attention-deadline">Tenggat {{ decision_config.commitment_deadline|date:"d M, H:i" }}</span>
+        <span class="attention-deadline">Tenggat {{ result.decision.deadline|date:"d M, H:i" }}</span>
     </div>
 </section>
 
@@ -63,13 +63,14 @@
             <div><span>Susulan</span><strong>{{ rec.commit_later_units }} unit</strong></div>
             <div><span>Modal dibutuhkan</span><strong>Rp{{ rec.required_capital|floatformat:0|intcomma }}</strong></div>
             <div><span>Estimasi kontribusi</span><strong>Rp{{ rec.expected_contribution|floatformat:0|intcomma }}</strong></div>
+            {% if rec.required_material %}<div><span>Kebutuhan material</span><strong>{{ rec.required_material|floatformat:"-2" }}</strong></div>{% endif %}
         </div>
         <div class="recommendation-footer">
             <form method="post" action="{% url 'dashboard:approve_plan' sku.sku_id %}">
                 {% csrf_token %}
-                <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes }}">
+                <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|default_if_none:'' }}">
                 <input type="hidden" name="capital" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit }}">
-                <input type="hidden" name="deadline" value="{{ whatif.commitment_deadline|default:decision_config.commitment_deadline|date:'Y-m-d\TH:i' }}">
+                <input type="hidden" name="window_hours" value="{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }}">
                 <button type="submit" class="ram-btn ram-btn-primary ram-btn-lg">Setujui dan simpan rencana</button>
             </form>
             <span>Evaluasi ulang {{ rec.reevaluate_at|date:"d M, H:i" }}</span>
@@ -88,7 +89,7 @@
 <section class="key-metrics" aria-label="Ringkasan kondisi">
     <article class="key-metric animate-in"><span class="metric-index">01</span><div><span>Stok saat ini</span><strong>{{ result.current_stock }} unit</strong></div></article>
     <article class="key-metric animate-in"><span class="metric-index">02</span><div><span>Peluang demand bertahan</span><strong>{% widthratio result.decision.surge_persistence_48h 1 100 %}%</strong></div></article>
-    <article class="key-metric animate-in"><span class="metric-index">03</span><div><span>Batas keputusan</span><strong>{{ decision_config.commitment_deadline|date:"d M, H:i" }}</strong></div></article>
+    <article class="key-metric animate-in"><span class="metric-index">03</span><div><span>Batas keputusan</span><strong>{{ result.decision.deadline|date:"d M, H:i" }}</strong><small>{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }} jam lagi</small></div></article>
 </section>
 
 <section class="content-section" aria-labelledby="options-title">
@@ -132,13 +133,13 @@
 <section id="plan-section" class="planning-grid content-section">
     <article class="whatif-card animate-in">
         <div class="eyebrow">Simulasi keputusan</div><h2>Coba kondisi lain</h2>
-        <p>Ubah kapasitas, modal, atau tenggat. RamAI akan menghitung ulang seluruh pilihan.</p>
+        <p>Ubah {% if decision_config.daily_capacity_minutes %}kapasitas, {% endif %}modal, atau sisa waktu keputusan. RamAI akan menghitung ulang seluruh pilihan.</p>
         <form method="get" action="{% url 'dashboard:decision_center' sku.sku_id %}" id="whatif-form">
             <input type="hidden" name="sku" value="{{ sku.sku_id }}">
             <div class="form-grid">
-                <div class="ram-form-group"><label class="ram-label" for="wf-capacity">Kapasitas per hari</label><input id="wf-capacity" type="number" min="0" name="capacity_minutes" class="ram-input" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes }}"><small>menit produksi</small></div>
+                {% if decision_config.daily_capacity_minutes %}<div class="ram-form-group"><label class="ram-label" for="wf-capacity">Kapasitas per hari</label><input id="wf-capacity" type="number" min="0" name="capacity_minutes" class="ram-input" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes }}"><small>menit produksi</small></div>{% endif %}
                 <div class="ram-form-group"><label class="ram-label" for="wf-capital">Modal tersedia</label><input id="wf-capital" type="number" min="0" name="capital" class="ram-input" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit }}"><small>rupiah</small></div>
-                <div class="ram-form-group"><label class="ram-label" for="wf-deadline">Batas keputusan</label><input id="wf-deadline" type="datetime-local" name="deadline" class="ram-input" value="{{ whatif.commitment_deadline|default:decision_config.commitment_deadline|date:'Y-m-d\TH:i' }}"></div>
+                <div class="ram-form-group"><label class="ram-label" for="wf-window">Sisa waktu keputusan</label><input id="wf-window" type="number" min="1" step="1" name="window_hours" class="ram-input" value="{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }}"><small>jam dari sekarang</small></div>
             </div>
             <button type="submit" class="ram-btn ram-btn-outline">Hitung ulang rekomendasi</button>
         </form>

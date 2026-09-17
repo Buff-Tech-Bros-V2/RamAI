@@ -16,7 +16,7 @@ class DecisionConfigAdmin(admin.ModelAdmin):
         "constraint_profile",
         "daily_capacity_minutes",
         "working_capital_limit",
-        "commitment_deadline",
+        "decision_window_hours",
     )
 
 

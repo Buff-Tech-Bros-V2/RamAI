@@ -16,14 +16,17 @@ FR-O07 (cross-SKU capacity allocation) is not implemented (marked P1 in
 the PRD).
 """
 
+from datetime import timedelta
+
 from apps.forecasting.dataclasses import ForecastOutput
 from apps.skus.models import DecisionConfig, SKU
 
 from .dataclasses import ActionCandidate, DecisionResult
 
-# Simplified delay-risk assumption: fraction of committed units treated as
-# "too late to fully capture horizon demand" for each action. Placeholder
-# until a real transaction-risk / lead-time model exists (PRD 10.4).
+# Fallback delay-risk assumption, used only when the SKU has no
+# `supplier_lead_time_hours` configured (typically PRODUCTION mode, where
+# there is no supplier to wait for). When a lead time IS configured it is
+# used directly -- see `_delay_risk` below.
 DELAY_RISK_FRACTION = {
     "COMMIT_NOW": 0.0,
     "STAGED_COMMITMENT": 0.05,
@@ -49,20 +52,31 @@ class DecisionEngine:
         capital_limit = float(
             overrides.get("working_capital_limit", decision_config.working_capital_limit)
         )
-        deadline = overrides.get("commitment_deadline", decision_config.commitment_deadline)
+        window_hours = overrides.get(
+            "decision_window_hours", decision_config.decision_window_hours
+        )
+        deadline = now + timedelta(hours=float(window_hours))
 
         production_minutes_per_unit = decision_config.production_minutes_per_unit
         unit_selling_price = float(decision_config.unit_selling_price)
         unit_variable_cost = float(decision_config.unit_variable_cost)
         salvage_value_per_unit = float(decision_config.salvage_value_per_unit)
 
+        minimum_commitment = float(decision_config.minimum_commitment or 0)
+        lead_time_hours = decision_config.supplier_lead_time_hours
+        shelf_life_hours = decision_config.shelf_life_hours
+        material_per_unit = decision_config.material_per_unit
+        horizon_hours = forecast.horizon_hours
+
         # `daily_capacity_minutes` is a per-day figure, but demand is cumulative
         # over the whole forecast horizon (e.g. 48h = 2 days) -- scale capacity
         # to the horizon so it isn't under-counted by ~horizon_days times.
         horizon_days = forecast.horizon_hours / 24
+        # Capacity only binds when both halves are known: minutes available per
+        # day AND minutes consumed per unit. Replenishment SKUs have neither.
         max_units_capacity = (
             (capacity_minutes * horizon_days) / production_minutes_per_unit
-            if production_minutes_per_unit
+            if production_minutes_per_unit and capacity_minutes
             else float("inf")
         )
         max_units_capital = (
@@ -76,15 +90,62 @@ class DecisionEngine:
         gap_p50 = max(demand_p50 - current_stock, 0)
         gap_p90 = max(demand_p90 - current_stock, 0)
 
-        def clamp(units: float) -> float:
-            return max(0.0, min(units, max_units))
+        def feasible(units: float, ceiling: float) -> float:
+            """Clamp to the capacity/capital ceiling, then honour the MOQ.
 
-        commit_now_full = clamp(gap_p90)
-        commit_now_staged = clamp(gap_p50)
-        commit_later_staged = clamp(gap_p90 - commit_now_staged)
-        wait_units = clamp(gap_p90)
+            A batch smaller than `minimum_commitment` cannot be placed at all,
+            so it is either rounded up to the MOQ (when the ceilings allow) or
+            dropped entirely -- never silently ordered below the minimum.
+            """
+            units = max(0.0, min(units, ceiling))
+            if units <= 0 or minimum_commitment <= 0 or units >= minimum_commitment:
+                return units
+            return minimum_commitment if minimum_commitment <= ceiling else 0.0
+
+        commit_now_full = feasible(gap_p90, max_units)
+        commit_now_staged = feasible(gap_p50, max_units)
+        # The later tranche only gets whatever capacity/capital the first
+        # tranche left over, and must clear the MOQ on its own.
+        staged_remaining = max(max_units - commit_now_staged, 0.0)
+        commit_later_staged = feasible(gap_p90 - commit_now_staged, staged_remaining)
+        wait_units = feasible(gap_p90, max_units)
+
+        moq_blocked = minimum_commitment > 0 and max_units < minimum_commitment
 
         midpoint = now + (deadline - now) / 2
+
+        def delay_risk(action: str, commit_at) -> float:
+            """Fraction of the horizon already gone by the time stock arrives.
+
+            With a known supplier lead time this is a real quantity: order at
+            `commit_at`, goods land `lead_time_hours` later, and everything
+            before that point is demand the commitment cannot serve. Without a
+            lead time (production in-house) we fall back to the placeholder.
+            """
+            if lead_time_hours is None or horizon_hours <= 0:
+                return DELAY_RISK_FRACTION[action]
+            hours_until_commit = max((commit_at - now).total_seconds() / 3600, 0.0)
+            return min((hours_until_commit + lead_time_hours) / horizon_hours, 1.0)
+
+        def blended_risk(action: str, tranches) -> float:
+            """Unit-weighted delay risk across tranches committed at different times."""
+            total = sum(units for units, _ in tranches)
+            if total <= 0:
+                return delay_risk(action, now)
+            return sum(units * delay_risk(action, at) for units, at in tranches) / total
+
+        # Stock that outlives the horizon is only worth its salvage value if it
+        # is still sellable. Lead time eats into shelf life before the goods
+        # even reach the shop, so subtract it first.
+        usable_shelf_life = (
+            shelf_life_hours - (lead_time_hours or 0.0)
+            if shelf_life_hours is not None
+            else None
+        )
+        residual_spoils = (
+            usable_shelf_life is not None and usable_shelf_life <= horizon_hours
+        )
+        effective_salvage = 0.0 if residual_spoils else salvage_value_per_unit
 
         candidates = [
             self._score_candidate(
@@ -95,7 +156,9 @@ class DecisionEngine:
                 demand_p50=demand_p50,
                 unit_selling_price=unit_selling_price,
                 unit_variable_cost=unit_variable_cost,
-                salvage_value_per_unit=salvage_value_per_unit,
+                salvage_value_per_unit=effective_salvage,
+                delay_risk=blended_risk("COMMIT_NOW", [(commit_now_full, now)]),
+                material_per_unit=material_per_unit,
             ),
             self._score_candidate(
                 action="STAGED_COMMITMENT",
@@ -105,7 +168,12 @@ class DecisionEngine:
                 demand_p50=demand_p50,
                 unit_selling_price=unit_selling_price,
                 unit_variable_cost=unit_variable_cost,
-                salvage_value_per_unit=salvage_value_per_unit,
+                salvage_value_per_unit=effective_salvage,
+                delay_risk=blended_risk(
+                    "STAGED_COMMITMENT",
+                    [(commit_now_staged, now), (commit_later_staged, midpoint)],
+                ),
+                material_per_unit=material_per_unit,
             ),
             self._score_candidate(
                 action="WAIT",
@@ -115,7 +183,9 @@ class DecisionEngine:
                 demand_p50=demand_p50,
                 unit_selling_price=unit_selling_price,
                 unit_variable_cost=unit_variable_cost,
-                salvage_value_per_unit=salvage_value_per_unit,
+                salvage_value_per_unit=effective_salvage,
+                delay_risk=blended_risk("WAIT", [(wait_units, deadline)]),
+                material_per_unit=material_per_unit,
             ),
         ]
 
@@ -130,13 +200,66 @@ class DecisionEngine:
             confidence = "HIGH"
 
         assumptions = [
-            f"Kapasitas produksi {capacity_minutes:.0f} menit/hari.",
             f"Modal kerja tersedia Rp{capital_limit:,.0f}.",
-            f"Commitment deadline {deadline:%Y-%m-%d %H:%M}.",
-            "Risiko keterlambatan staged/wait pakai asumsi placeholder "
-            f"({DELAY_RISK_FRACTION['STAGED_COMMITMENT']:.0%}/"
-            f"{DELAY_RISK_FRACTION['WAIT']:.0%}), belum dari model transaction risk.",
+            f"Keputusan harus diambil dalam {float(window_hours):.0f} jam "
+            f"(paling lambat {deadline:%Y-%m-%d %H:%M}).",
         ]
+
+        if capacity_minutes and production_minutes_per_unit:
+            assumptions.insert(
+                0, f"Kapasitas produksi {capacity_minutes:.0f} menit/hari."
+            )
+        else:
+            assumptions.insert(
+                0,
+                "Tanpa batas kapasitas produksi (mode replenishment); kuantitas "
+                "dibatasi modal kerja saja.",
+            )
+
+        if lead_time_hours is not None:
+            assumptions.append(
+                f"Lead time supplier {lead_time_hours:.0f} jam: risiko keterlambatan "
+                f"dihitung dari porsi horizon {horizon_hours:.0f} jam yang sudah lewat "
+                "saat barang tiba."
+            )
+        else:
+            assumptions.append(
+                "Tidak ada lead time supplier (produksi sendiri); risiko keterlambatan "
+                f"staged/wait pakai asumsi placeholder "
+                f"({DELAY_RISK_FRACTION['STAGED_COMMITMENT']:.0%}/"
+                f"{DELAY_RISK_FRACTION['WAIT']:.0%})."
+            )
+
+        if minimum_commitment > 0:
+            assumptions.append(
+                f"Minimum produksi/pemesanan {minimum_commitment:.0f} unit per batch; "
+                "batch di bawah itu dibulatkan naik atau dibatalkan."
+            )
+        if moq_blocked:
+            assumptions.append(
+                f"Kapasitas/modal hanya cukup untuk {max_units:.0f} unit, di bawah "
+                f"minimum {minimum_commitment:.0f} unit -- semua opsi commit jadi 0 unit."
+            )
+
+        if shelf_life_hours is not None:
+            if residual_spoils:
+                assumptions.append(
+                    f"Masa simpan {shelf_life_hours:.0f} jam (sisa {usable_shelf_life:.0f} "
+                    f"jam setelah lead time) tidak melewati horizon {horizon_hours:.0f} jam: "
+                    "stok sisa dihitung kedaluwarsa, nilai sisa Rp0."
+                )
+            else:
+                assumptions.append(
+                    f"Masa simpan {shelf_life_hours:.0f} jam melewati horizon "
+                    f"{horizon_hours:.0f} jam: stok sisa masih bisa dijual, nilai sisa "
+                    f"Rp{salvage_value_per_unit:,.0f}/unit."
+                )
+
+        if material_per_unit:
+            assumptions.append(
+                f"Kebutuhan material {material_per_unit:g} per unit; total per opsi "
+                "ditampilkan sebagai kebutuhan material."
+            )
 
         return DecisionResult(
             decision_time=now,
@@ -145,6 +268,7 @@ class DecisionEngine:
             constraint_profile=decision_config.constraint_profile,
             recommended=recommended,
             alternatives=alternatives,
+            deadline=deadline,
             surge_persistence_48h=forecast.surge_persistence_probability,
             confidence=confidence,
             assumptions=assumptions,
@@ -160,9 +284,10 @@ class DecisionEngine:
         unit_selling_price: float,
         unit_variable_cost: float,
         salvage_value_per_unit: float,
+        delay_risk: float,
+        material_per_unit: float | None = None,
     ) -> ActionCandidate:
         committed_total = commit_now_units + commit_later_units
-        delay_risk = DELAY_RISK_FRACTION[action]
 
         # `committed_total` units are produced/paid for regardless of delay
         # risk. Delay risk only shrinks how much of the demand-matching
@@ -194,4 +319,9 @@ class DecisionEngine:
             expected_fill_rate=round(fill_rate, 2),
             expected_lost_units=round(lost_units, 1),
             residual_stock_risk_units=round(residual_units, 1),
+            required_material=(
+                round(committed_total * material_per_unit, 2)
+                if material_per_unit
+                else None
+            ),
         )

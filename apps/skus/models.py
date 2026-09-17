@@ -8,6 +8,8 @@ the `seed_dummy_data` management command -- there is no real
 marketplace or ERP integration yet (see PRD section 21, Phase 1/2).
 """
 
+from datetime import timedelta
+
 from django.db import models
 
 
@@ -21,6 +23,37 @@ class ConstraintProfile(models.TextChoices):
     FASHION = "FASHION", "Fashion"
     BEAUTY = "BEAUTY", "Beauty"
     ELECTRONICS = "ELECTRONICS", "Electronics"
+
+
+# Starting points offered in the product form so a seller picking a profile
+# does not face an empty grid. Every value stays editable -- these are
+# defaults, not constraints, and only fill fields the user left blank.
+CONSTRAINT_PROFILE_PRESETS = {
+    ConstraintProfile.FOOD_DEMO: {
+        "operation_mode": OperationMode.PRODUCTION,
+        "shelf_life_hours": 48,
+        "minimum_commitment": 20,
+        "decision_window_hours": 6,
+    },
+    ConstraintProfile.FASHION: {
+        "operation_mode": OperationMode.REPLENISHMENT,
+        "shelf_life_hours": None,
+        "minimum_commitment": 50,
+        "decision_window_hours": 24,
+    },
+    ConstraintProfile.BEAUTY: {
+        "operation_mode": OperationMode.REPLENISHMENT,
+        "shelf_life_hours": 8760,
+        "minimum_commitment": 30,
+        "decision_window_hours": 24,
+    },
+    ConstraintProfile.ELECTRONICS: {
+        "operation_mode": OperationMode.REPLENISHMENT,
+        "shelf_life_hours": None,
+        "minimum_commitment": 10,
+        "decision_window_hours": 48,
+    },
+}
 
 
 class SKU(models.Model):
@@ -61,11 +94,25 @@ class DecisionConfig(models.Model):
     salvage_value_per_unit = models.DecimalField(
         max_digits=12, decimal_places=2, default=0
     )
+    # Only binding in PRODUCTION mode, where it pairs with
+    # `production_minutes_per_unit`; replenishment sellers leave it blank.
     daily_capacity_minutes = models.FloatField(
-        help_text="Shop-level production/handling capacity per day."
+        null=True,
+        blank=True,
+        help_text="Shop-level production/handling capacity per day.",
     )
     working_capital_limit = models.DecimalField(max_digits=14, decimal_places=2)
-    commitment_deadline = models.DateTimeField()
+    # Rolling horizon rather than a fixed timestamp: an absolute deadline goes
+    # stale the moment it passes, silently making every recommendation for the
+    # SKU a calculation against a date in the past.
+    decision_window_hours = models.PositiveSmallIntegerField(
+        default=24,
+        help_text="How many hours from now the commitment decision must be made.",
+    )
+
+    def deadline_from(self, now):
+        """Absolute commitment deadline for a decision taken at `now`."""
+        return now + timedelta(hours=self.decision_window_hours)
 
     def __str__(self):
         return f"DecisionConfig({self.sku_id})"

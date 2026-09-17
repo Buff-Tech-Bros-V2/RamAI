@@ -15,6 +15,10 @@ class ActionCandidate:
     expected_fill_rate: float
     expected_lost_units: float
     residual_stock_risk_units: float
+    # Total material consumed by this commitment (units x
+    # DecisionConfig.material_per_unit). None when the SKU has no material
+    # profile configured.
+    required_material: float | None = None
 
 
 @dataclass
@@ -25,6 +29,9 @@ class DecisionResult:
     constraint_profile: str
     recommended: ActionCandidate
     alternatives: list[ActionCandidate]
+    # Absolute deadline for THIS decision, derived from the SKU's rolling
+    # decision window at `decision_time`.
+    deadline: datetime
     surge_persistence_48h: float
     confidence: str  # HIGH | MEDIUM | LOW
     assumptions: list[str] = field(default_factory=list)

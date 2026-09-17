@@ -29,6 +29,7 @@
             <div><span>Estimasi kontribusi</span><strong>Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}</strong></div>
             <div><span>Penjualan berisiko hilang</span><strong class="risk">{{ candidate.expected_lost_units|floatformat:0 }} unit</strong></div>
             <div><span>Risiko stok tersisa</span><strong class="risk">{{ candidate.residual_stock_risk_units|floatformat:0 }} unit</strong></div>
+            {% if candidate.required_material %}<div><span>Kebutuhan material</span><strong>{{ candidate.required_material|floatformat:"-2" }}</strong></div>{% endif %}
             <div><span>Evaluasi kembali</span><strong>{{ candidate.reevaluate_at|date:"d M, H:i" }}</strong></div>
         </div>
     </details>

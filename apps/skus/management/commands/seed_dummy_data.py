@@ -167,8 +167,7 @@ class Command(BaseCommand):
                     "salvage_value_per_unit": scenario["salvage_value_per_unit"],
                     "daily_capacity_minutes": scenario["daily_capacity_minutes"],
                     "working_capital_limit": scenario["working_capital_limit"],
-                    "commitment_deadline": now
-                    + timedelta(hours=scenario["deadline_hours_from_now"]),
+                    "decision_window_hours": scenario["deadline_hours_from_now"],
                 },
             )
 
@@ -210,6 +209,12 @@ class Command(BaseCommand):
             sku_objs[sku_id] = sku
 
         # 2. Seed DecisionConfigs
+        #
+        # The CSV still carries an absolute `commitment_deadline`; the model
+        # stores a rolling window instead, so convert it into "hours after the
+        # SKU's last observation" -- the point each decision is anchored on.
+        last_seen = obs_df.groupby("sku_id")["timestamp"].max().to_dict()
+
         if decision_cfg is not None:
             for _, row in decision_cfg.iterrows():
                 sku_id = str(row["sku_id"])
@@ -222,8 +227,11 @@ class Command(BaseCommand):
                     else float(row["supplier_lead_time_hours"])
                 )
                 deadline = pd.to_datetime(row["commitment_deadline"])
-                if timezone.is_naive(deadline):
-                    deadline = timezone.make_aware(deadline)
+                anchor = last_seen.get(sku_id)
+                window_hours = 24
+                if anchor is not None:
+                    hours = (deadline - anchor).total_seconds() / 3600
+                    window_hours = max(1, min(round(hours), 720))
 
                 DecisionConfig.objects.update_or_create(
                     sku=sku,
@@ -240,7 +248,7 @@ class Command(BaseCommand):
                         "salvage_value_per_unit": float(row["salvage_value_per_unit"]),
                         "daily_capacity_minutes": float(row["daily_capacity_minutes"]),
                         "working_capital_limit": float(row["working_capital_limit"]),
-                        "commitment_deadline": deadline,
+                        "decision_window_hours": window_hours,
                     },
                 )
 

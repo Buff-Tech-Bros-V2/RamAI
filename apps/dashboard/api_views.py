@@ -15,8 +15,6 @@ import json
 
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
-from django.utils import timezone
-from django.utils.dateparse import parse_datetime
 
 from apps.agent.orchestrator import Agent
 from apps.skus.models import SKU
@@ -41,13 +39,12 @@ def _parse_overrides(request) -> dict:
         except ValueError:
             pass
 
-    deadline = source.get("deadline")
-    if deadline:
-        parsed = parse_datetime(deadline)
-        if parsed:
-            if timezone.is_naive(parsed):
-                parsed = timezone.make_aware(parsed)
-            overrides["commitment_deadline"] = parsed
+    window = source.get("window_hours")
+    if window:
+        try:
+            overrides["decision_window_hours"] = max(1.0, float(window))
+        except ValueError:
+            pass
 
     return overrides
 
