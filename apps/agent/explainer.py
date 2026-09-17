@@ -36,6 +36,8 @@ ACTION_LABELS = {
     "COMMIT_NOW": "siapkan stok sekarang",
     "STAGED_COMMITMENT": "siapkan stok bertahap",
     "WAIT": "tunggu dulu sebelum menambah stok",
+    "NO_BUY_NEEDED": "stok sudah cukup, belum perlu tambah",
+    "NO_BUY_POSSIBLE": "belum bisa menambah stok karena batas modal/kapasitas/minimum pesan",
 }
 
 

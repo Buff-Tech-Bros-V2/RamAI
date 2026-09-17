@@ -51,11 +51,15 @@
         <div class="recommendation-title">
             {% if rec.action == "COMMIT_NOW" %}Siapkan stok sekarang
             {% elif rec.action == "STAGED_COMMITMENT" %}Siapkan bertahap, tambah saat permintaan makin pasti
+            {% elif rec.action == "NO_BUY_NEEDED" %}Stok sudah cukup, belum perlu tambah
+            {% elif rec.action == "NO_BUY_POSSIBLE" %}Belum bisa menambah stok
             {% else %}Tunggu dulu sampai data berikutnya masuk{% endif %}
         </div>
         <p class="recommendation-summary">
             {% if rec.action == "COMMIT_NOW" %}Amankan permintaan lebih cepat untuk menekan risiko kehabisan stok.
             {% elif rec.action == "STAGED_COMMITMENT" %}Jaga ketersediaan barang tanpa mengikat seluruh modal sejak awal.
+            {% elif rec.action == "NO_BUY_NEEDED" %}Stok yang ada sudah menutup perkiraan permintaan sampai batas waktu. Tidak ada modal yang perlu keluar.
+            {% elif rec.action == "NO_BUY_POSSIBLE" %}Kapasitas, modal, atau minimum pemesanan belum mencukupi untuk satu batch pun. Periksa asumsi di bawah.
             {% else %}Tahan dulu modalnya sambil menunggu kepastian permintaan berikutnya.{% endif %}
         </p>
         <div class="recommendation-metrics">
@@ -89,6 +93,7 @@
     <article class="key-metric animate-in"><span class="metric-index">03</span><div><span>Batas keputusan</span><strong>{{ result.decision.deadline|date:"d M, H:i" }}</strong><small>{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }} jam lagi</small></div></article>
 </section>
 
+{% if result.decision.alternatives %}
 <section class="content-section" aria-labelledby="options-title">
     <div class="section-heading">
         <div><div class="eyebrow">Bandingkan sebelum memilih</div><h2 id="options-title">Tiga pilihan tindakan</h2></div>
@@ -99,6 +104,7 @@
         {% for alt in result.decision.alternatives %}{% include "dashboard/_action_card.html" with candidate=alt is_recommended=False %}{% endfor %}
     </div>
 </section>
+{% endif %}
 
 <section id="forecast-section" class="content-section">
     <div class="section-heading">
@@ -144,7 +150,8 @@
     <article class="action-plan-card animate-in">
         <div class="eyebrow">Langkah berikutnya</div><h2>Rencana tindakan</h2>
         <ol class="plan-steps">
-            <li><span>1</span><div><strong>Siapkan {{ rec.commit_now_units }} unit</strong><p>Gunakan batas modal yang sudah diperiksa decision engine.</p></div></li>
+            {% if rec.commit_now_units %}<li><span>1</span><div><strong>Siapkan {{ rec.commit_now_units }} unit</strong><p>Gunakan batas modal yang sudah diperiksa mesin keputusan RamAI.</p></div></li>
+            {% else %}<li><span>1</span><div><strong>Belum ada pembelian</strong><p>{% if rec.action == "NO_BUY_POSSIBLE" %}Longgarkan modal, kapasitas, atau minimum pemesanan bila stok memang perlu ditambah.{% else %}Stok yang ada sudah cukup untuk perkiraan permintaan sampai batas waktu.{% endif %}</p></div></li>{% endif %}
             <li><span>2</span><div><strong>Pantau order berikutnya</strong><p>Perhatikan perubahan demand dan ketersediaan stok.</p></div></li>
             <li><span>3</span><div><strong>Evaluasi {{ rec.reevaluate_at|date:"d M, H:i" }}</strong><p>Hitung ulang sebelum menambah {{ rec.commit_later_units }} unit berikutnya.</p></div></li>
         </ol>

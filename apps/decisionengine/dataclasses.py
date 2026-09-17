@@ -6,7 +6,11 @@ from datetime import datetime
 
 @dataclass
 class ActionCandidate:
-    action: str  # COMMIT_NOW | STAGED_COMMITMENT | WAIT
+    # COMMIT_NOW | STAGED_COMMITMENT | WAIT, plus the two terminal states the
+    # engine reports when every candidate comes out at zero units:
+    # NO_BUY_NEEDED (stock already covers P90 demand) and NO_BUY_POSSIBLE
+    # (capacity, capital or MOQ blocks every batch).
+    action: str
     commit_now_units: int
     commit_later_units: int
     reevaluate_at: datetime

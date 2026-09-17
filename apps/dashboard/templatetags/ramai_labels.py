@@ -13,6 +13,8 @@ ACTION_LABELS = {
     "COMMIT_NOW": "Siapkan stok sekarang",
     "STAGED_COMMITMENT": "Siapkan bertahap",
     "WAIT": "Tunggu dulu",
+    "NO_BUY_NEEDED": "Stok sudah cukup",
+    "NO_BUY_POSSIBLE": "Belum bisa menambah stok",
 }
 
 # Same meaning, for cells too narrow for the full phrase.
@@ -20,6 +22,8 @@ ACTION_LABELS_SHORT = {
     "COMMIT_NOW": "Siapkan sekarang",
     "STAGED_COMMITMENT": "Bertahap",
     "WAIT": "Tunggu dulu",
+    "NO_BUY_NEEDED": "Stok cukup",
+    "NO_BUY_POSSIBLE": "Belum bisa tambah",
 }
 
 

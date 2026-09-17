@@ -16,6 +16,7 @@ FR-O07 (cross-SKU capacity allocation) is not implemented (marked P1 in
 the PRD).
 """
 
+from dataclasses import replace
 from datetime import timedelta
 
 from apps.forecasting.dataclasses import ForecastOutput
@@ -154,6 +155,7 @@ class DecisionEngine:
                 commit_later_units=0,
                 reevaluate_at=deadline,
                 demand_p50=demand_p50,
+                current_stock=current_stock,
                 unit_selling_price=unit_selling_price,
                 unit_variable_cost=unit_variable_cost,
                 salvage_value_per_unit=effective_salvage,
@@ -166,6 +168,7 @@ class DecisionEngine:
                 commit_later_units=commit_later_staged,
                 reevaluate_at=midpoint,
                 demand_p50=demand_p50,
+                current_stock=current_stock,
                 unit_selling_price=unit_selling_price,
                 unit_variable_cost=unit_variable_cost,
                 salvage_value_per_unit=effective_salvage,
@@ -181,6 +184,7 @@ class DecisionEngine:
                 commit_later_units=wait_units,
                 reevaluate_at=deadline,
                 demand_p50=demand_p50,
+                current_stock=current_stock,
                 unit_selling_price=unit_selling_price,
                 unit_variable_cost=unit_variable_cost,
                 salvage_value_per_unit=effective_salvage,
@@ -189,8 +193,21 @@ class DecisionEngine:
             ),
         ]
 
-        recommended = max(candidates, key=lambda c: c.expected_contribution)
-        alternatives = [c for c in candidates if c is not recommended]
+        # When nothing can or should be bought, all three candidates collapse
+        # to the same zero-unit plan with identical economics, and `max` would
+        # just return whichever happens to be listed first -- surfacing
+        # "commit now, 0 units" as if it were a real choice. Report the actual
+        # state instead, and drop the alternatives: there is nothing to compare.
+        if all(c.commit_now_units + c.commit_later_units == 0 for c in candidates):
+            recommended = replace(
+                candidates[0],
+                action="NO_BUY_NEEDED" if gap_p90 <= 0 else "NO_BUY_POSSIBLE",
+                reevaluate_at=deadline,
+            )
+            alternatives = []
+        else:
+            recommended = max(candidates, key=lambda c: c.expected_contribution)
+            alternatives = [c for c in candidates if c is not recommended]
 
         if "insufficient_history" in forecast.data_quality_flags:
             confidence = "LOW"
@@ -281,6 +298,7 @@ class DecisionEngine:
         commit_later_units: float,
         reevaluate_at,
         demand_p50: float,
+        current_stock: float,
         unit_selling_price: float,
         unit_variable_cost: float,
         salvage_value_per_unit: float,
@@ -289,15 +307,23 @@ class DecisionEngine:
     ) -> ActionCandidate:
         committed_total = commit_now_units + commit_later_units
 
+        # Stock already on the shelf serves demand first: it is a sunk
+        # purchase, so it removes lost sales but earns this decision no
+        # revenue. Only the newly committed units are scored on their own
+        # economics -- otherwise a SKU whose shelf already covers demand
+        # would be charged a lost-sales penalty for demand it fully serves.
+        served_from_stock = min(current_stock, demand_p50)
+        unmet_demand = max(demand_p50 - served_from_stock, 0)
+
         # `committed_total` units are produced/paid for regardless of delay
         # risk. Delay risk only shrinks how much of the demand-matching
         # portion actually arrives on time to be sold (delivered/lost); it
         # must NOT shrink the base used for the residual-stock calculation,
         # otherwise a riskier, later commitment would look like it wastes
         # less stock than committing now -- which is backwards.
-        raw_deliverable = min(committed_total, demand_p50)
+        raw_deliverable = min(committed_total, unmet_demand)
         delivered = raw_deliverable * (1 - delay_risk)
-        lost_units = max(demand_p50 - delivered, 0)
+        lost_units = max(unmet_demand - delivered, 0)
         residual_units = max(committed_total - delivered, 0)
 
         revenue = delivered * unit_selling_price
@@ -306,7 +332,11 @@ class DecisionEngine:
         lost_sales_penalty = lost_units * (unit_selling_price - unit_variable_cost) * 0.5
 
         expected_contribution = revenue - variable_cost - residual_cost - lost_sales_penalty
-        fill_rate = delivered / demand_p50 if demand_p50 > 0 else 1.0
+        # Fill rate answers "how much demand gets served", so it counts both
+        # sources -- unlike contribution, which counts only new units.
+        fill_rate = (
+            (served_from_stock + delivered) / demand_p50 if demand_p50 > 0 else 1.0
+        )
         required_capital = committed_total * unit_variable_cost
 
         return ActionCandidate(
