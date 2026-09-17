@@ -1,0 +1,7 @@
+{# One labelled form field. `data-field` lets the form JS find it by name. #}
+<div class="field-wrap {% if full_width %}full-width{% endif %}" data-field="{{ field.name }}">
+    <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<em>*</em>{% endif %}</label>
+    {{ field }}
+    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+    {% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}
+</div>

@@ -14,14 +14,107 @@
 
     <section class="form-card">
         <div class="form-card-heading"><span>01</span><div><h2>Identitas produk</h2><p>Informasi dasar yang digunakan di seluruh workspace.</p></div></div>
-        <div class="form-fields two-columns">{% for field in sku_form %}<div class="field-wrap {% if field.name == 'demo_scenario' %}full-width{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<em>*</em>{% endif %}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% endfor %}</div>
+        <div class="form-fields two-columns">{% for field in sku_form %}{% if field.name == 'demo_scenario' %}{% include "dashboard/products/_field.html" with field=field full_width=True %}{% else %}{% include "dashboard/products/_field.html" with field=field %}{% endif %}{% endfor %}</div>
     </section>
 
     <section class="form-card">
-        <div class="form-card-heading"><span>02</span><div><h2>Aturan keputusan</h2><p>Biaya, kapasitas, dan tenggat yang membatasi rekomendasi RamAI.</p></div></div>
-        <div class="form-fields three-columns">{% for field in config_form %}<div class="field-wrap"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<em>*</em>{% endif %}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% endfor %}</div>
+        <div class="form-card-heading"><span>02</span><div><h2>Aturan keputusan</h2><p>Pilih template, lalu isi biaya dan batas yang berlaku untuk cara pemenuhan stok Anda.</p></div></div>
+
+        <div class="form-fields two-columns template-row">{% for field in config_form.template_fields %}{% include "dashboard/products/_field.html" with field=field %}{% endfor %}</div>
+
+        <div class="form-fields three-columns">{% for field in config_form.primary_fields %}{% include "dashboard/products/_field.html" with field=field %}{% endfor %}</div>
+
+        <details class="advanced-fields"{% if config_form.advanced_has_errors %} open{% endif %}>
+            <summary>Detail lanjutan<span>Terisi otomatis dari template — ubah bila perlu</span></summary>
+            <div class="form-fields three-columns">{% for field in config_form.advanced_fields %}{% include "dashboard/products/_field.html" with field=field %}{% endfor %}</div>
+        </details>
     </section>
 
     <div class="form-actions"><a href="{% if product %}{% url 'dashboard:product_detail' product.sku_id %}{% else %}{% url 'dashboard:product_list' %}{% endif %}" class="ram-btn ram-btn-ghost">Batal</a><button type="submit" class="ram-btn ram-btn-primary">Simpan produk</button></div>
 </form>
+{{ config_form.form_config|json_script:"config-form-data" }}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var data = JSON.parse(document.getElementById('config-form-data').textContent);
+    var modeSelect = document.getElementById('id_operation_mode');
+    var profileSelect = document.getElementById('id_constraint_profile');
+    if (!modeSelect || !profileSelect) return;
+
+    function wrapFor(inputId) {
+        var input = document.getElementById(inputId);
+        return input ? input.closest('.field-wrap') : null;
+    }
+
+    // Show only the constraints the selected mode actually uses. Hidden inputs
+    // are cleared so a stale value from the other mode is never submitted --
+    // the server clears them too, this just keeps the UI honest.
+    function applyMode() {
+        Object.keys(data.modeFields).forEach(function (mode) {
+            var active = mode === modeSelect.value;
+            data.modeFields[mode].forEach(function (inputId) {
+                var wrap = wrapFor(inputId);
+                if (!wrap) return;
+                wrap.hidden = !active;
+                // These fields are required by clean() only for the active
+                // mode, so the asterisk has to follow the mode too.
+                var label = wrap.querySelector('label');
+                var mark = label ? label.querySelector('[data-required-mark]') : null;
+                if (active && label && !mark) {
+                    mark = document.createElement('em');
+                    mark.setAttribute('data-required-mark', '');
+                    mark.textContent = '*';
+                    label.appendChild(mark);
+                } else if (!active && mark) {
+                    mark.remove();
+                }
+                if (!active) {
+                    var input = document.getElementById(inputId);
+                    if (input) input.value = '';
+                }
+            });
+        });
+    }
+
+    // Anything the user edits by hand is off-limits to presets from then on.
+    // Switching template therefore re-fills only the fields still holding
+    // preset (or default) values, including clearing one the new template
+    // leaves blank -- otherwise a stale value from the previous template
+    // would linger.
+    var form = document.querySelector('.product-form');
+    var touched = new Set();
+
+    function markTouched(event) {
+        if (event.isTrusted && event.target.id) touched.add(event.target.id);
+    }
+    form.addEventListener('input', markTouched);
+    form.addEventListener('change', markTouched);
+
+    // Editing an existing product: every stored value counts as user input.
+    if (data.isEdit) {
+        form.querySelectorAll('input, select').forEach(function (input) {
+            if (input.id && input.value !== '') touched.add(input.id);
+        });
+    }
+
+    function applyPreset() {
+        var preset = data.presets[profileSelect.value];
+        if (!preset) return;
+        Object.keys(preset).forEach(function (name) {
+            var input = document.getElementById('id_' + name);
+            if (!input || touched.has(input.id)) return;
+            input.value = preset[name] === null ? '' : preset[name];
+        });
+    }
+
+    modeSelect.addEventListener('change', applyMode);
+    profileSelect.addEventListener('change', function () {
+        applyPreset();
+        applyMode();
+    });
+    applyMode();
+})();
+</script>
 {% endblock %}
