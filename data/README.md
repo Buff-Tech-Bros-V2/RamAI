@@ -61,10 +61,35 @@ Feature code must handle all-null content and set a `content_features_used` flag
 
 ## Signal structure worth knowing before modelling
 
-- Content velocity **leads** orders by `conversion_lag_hours` (1–8 h) — that lead is the
+- Content velocity **leads** orders by `conversion_lag_hours` (8–40 h) — that lead is the
   early-warning signal the enriched model is supposed to exploit.
+
+  **This is a stated assumption, not a measurement.** It says a viewer saves or shares
+  a video and buys later that day or the next, and that affiliate reach compounds after
+  the original post. An earlier version used 1–8 h, which made the content signal
+  worthless *by construction*: against 24–72 h forecast horizons, a 2-hour head start
+  carries nothing the transaction series does not already contain by the cutoff. The
+  value must be shown in the UI as an assumption and checked against real seller data
+  in the PRD §21 Phase 1 pilot. Results are sensitive to it — see below.
 - Demand is negative-binomial (overdispersed), not Poisson.
 - Hour-of-day and day-of-week seasonality are strong; weekends peak.
 - Prices drop 8–25% during promo windows; elasticity varies by SKU.
 - Replenishment is reactive on *past observed* sales with a thin buffer, so surges
   genuinely outrun stock — that's where the censoring comes from.
+
+## What the models found on this data
+
+Multi-seed (3 seeds) test-split results, transaction-only vs transaction-plus-content:
+
+| Question | 24h | 48h | 72h |
+| --- | --- | --- | --- |
+| Point accuracy (WAPE lift from content) | −6.0% | −0.4% | **+13.0%** |
+| Surge persistence (AUC lift from content) | **+0.048** | **+0.229** | **+0.170** |
+
+Content does **not** reliably improve the unit-count forecast — it hurts at 24h, where
+the conversion lag means the spike has not converted yet. It clearly improves the
+*persistence* judgement at every horizon, which is the question the decision engine
+actually asks. Both effects follow from the conversion-lag assumption above.
+
+Caveat: stockout censoring leaves only 451–864 usable test rows per horizon, so these
+are small test sets. The seed-to-seed spread is reported alongside every number.

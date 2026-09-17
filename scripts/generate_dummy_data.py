@@ -133,12 +133,22 @@ SHOP_CONFIG = {
 
 # Episode archetypes (FR-D04). conversion_efficiency translates content velocity
 # into actual demand uplift; a false signal converts almost nothing.
+#
+# ASSUMPTION -- affiliate conversion lag (lag_h). Content velocity leads the
+# order response by 8-40 hours: a viewer saves or shares a video and buys later
+# in the day or the next day, and affiliate reach keeps compounding after the
+# original post. An earlier version of this generator used 1-8 hours, which made
+# the content signal worthless by construction -- with 24-72h forecast horizons,
+# a 2-hour head start carries no information that the transaction series does not
+# already contain by the time of the cutoff. This value is a stated modelling
+# assumption, not a measurement; it should be shown in the UI and revisited
+# against real seller data in the PRD 21 Phase 1 pilot.
 EPISODE_TYPES = {
-    "TRUE_SURGE":     dict(peak_multiplier=(4.5, 7.5), ramp_h=(4, 8),   half_life_h=(40, 72), lag_h=(2, 5), conversion=(0.80, 1.00), content=True),
-    "FADING_SURGE":   dict(peak_multiplier=(3.5, 6.0), ramp_h=(2, 5),   half_life_h=(5, 10),  lag_h=(1, 4), conversion=(0.70, 0.95), content=True),
-    "FALSE_CONTENT":  dict(peak_multiplier=(3.0, 6.5), ramp_h=(2, 5),   half_life_h=(6, 14),  lag_h=(2, 5), conversion=(0.02, 0.10), content=True),
-    "MISSING_SIGNAL": dict(peak_multiplier=(3.0, 5.5), ramp_h=(3, 7),   half_life_h=(18, 40), lag_h=(2, 5), conversion=(0.75, 1.00), content=False),
-    "SLOW_BURN":      dict(peak_multiplier=(1.8, 2.8), ramp_h=(10, 20), half_life_h=(50, 90), lag_h=(3, 8), conversion=(0.70, 0.95), content=True),
+    "TRUE_SURGE":     dict(peak_multiplier=(4.5, 7.5), ramp_h=(4, 8),   half_life_h=(40, 72), lag_h=(12, 30), conversion=(0.80, 1.00), content=True),
+    "FADING_SURGE":   dict(peak_multiplier=(3.5, 6.0), ramp_h=(2, 5),   half_life_h=(5, 10),  lag_h=(8, 20),  conversion=(0.70, 0.95), content=True),
+    "FALSE_CONTENT":  dict(peak_multiplier=(3.0, 6.5), ramp_h=(2, 5),   half_life_h=(6, 14),  lag_h=(12, 30), conversion=(0.02, 0.10), content=True),
+    "MISSING_SIGNAL": dict(peak_multiplier=(3.0, 5.5), ramp_h=(3, 7),   half_life_h=(18, 40), lag_h=(12, 30), conversion=(0.75, 1.00), content=False),
+    "SLOW_BURN":      dict(peak_multiplier=(1.8, 2.8), ramp_h=(10, 20), half_life_h=(50, 90), lag_h=(18, 40), conversion=(0.70, 0.95), content=True),
 }
 
 
@@ -246,6 +256,7 @@ def plan_episodes(cfg: GeneratorConfig, n_hours: int, rng: np.random.Generator,
                 ep_rng = np.random.default_rng(seed_counter)
                 half_life = _u(ep_rng, spec["half_life_h"])
                 ramp = _ui(ep_rng, spec["ramp_h"])
+                lag = _ui(ep_rng, spec["lag_h"])
                 episodes.append(EpisodeSpec(
                     episode_id=f"EP-{sku.sku_id[-3:]}-{k:02d}",
                     event_seed=seed_counter,
@@ -255,10 +266,14 @@ def plan_episodes(cfg: GeneratorConfig, n_hours: int, rng: np.random.Generator,
                     peak_multiplier=_u(ep_rng, spec["peak_multiplier"]),
                     ramp_hours=ramp,
                     half_life_hours=half_life,
-                    conversion_lag_hours=_ui(ep_rng, spec["lag_h"]),
+                    conversion_lag_hours=lag,
                     conversion_efficiency=_u(ep_rng, spec["conversion"]),
                     has_content_signal=spec["content"],
-                    duration_hours=int(ramp + 5 * half_life),
+                    # the label window covers the lagged demand response, not just
+                    # the content curve, so per-episode metrics do not score real
+                    # surge hours as NORMAL once the conversion lag pushes the
+                    # order response later than the content spike
+                    duration_hours=int(ramp + 5 * half_life + lag),
                     split=split_name,
                 ))
 
@@ -276,7 +291,7 @@ def plan_episodes(cfg: GeneratorConfig, n_hours: int, rng: np.random.Generator,
             peak_multiplier=_u(ep_rng, (5.0, 7.0)),
             ramp_hours=_ui(ep_rng, (4, 7)),
             half_life_hours=_u(ep_rng, (36, 60)),
-            conversion_lag_hours=_ui(ep_rng, (2, 4)),
+            conversion_lag_hours=_ui(ep_rng, (12, 24)),
             conversion_efficiency=_u(ep_rng, (0.85, 1.0)),
             has_content_signal=True,
             duration_hours=96,
