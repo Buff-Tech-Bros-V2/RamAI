@@ -91,4 +91,5 @@ class Agent:
             "decision": decision,
             "packet": packet,
             "explanation_text": explanation_text,
+            "is_llm": getattr(self.explainer, "is_llm", False),
         }
