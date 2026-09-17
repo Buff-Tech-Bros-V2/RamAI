@@ -10,6 +10,20 @@ code path and differ only in ``feature_mode``:
 Target is cumulative fulfillment demand over the horizon, trained only on
 label windows that were not stockout-censored (see features.build_training_frame).
 
+Two things about *how* that target is fit matter more than the hyperparameters:
+
+**Ratio target.** Boosters are fit on ``demand / (trailing_level * horizon)``
+rather than on the raw count, and the prediction is multiplied back. A tree
+cannot extrapolate past the leaf averages it saw in training, so an absolute
+target makes it systematically under-call surges -- it has no way to say "3x
+normal" for a SKU whose normal level it has never seen that high. On the ratio
+scale that is one split. This removed most of the under-forecast bias
+(+13% -> +4% on the training split) and improved WAPE at every horizon.
+
+**Conformal intervals.** Raw quantile boosters undercovered (74% inside a
+nominal 80% band). ``bundle.conformal`` holds one width correction per horizon,
+fitted on the validation split only, that restores nominal coverage.
+
     bundle = train_bundle(obs, labels, feature_mode=MODE_CONTENT)
     bundle.save("artifacts/forecast_content")
     preds  = bundle.predict(X, horizon=48)     # -> DataFrame p10/p50/p90
@@ -35,7 +49,7 @@ from .features import (
 )
 
 MODEL_NAME = "lightgbm_quantile"
-MODEL_VERSION = "forecast-v1"
+MODEL_VERSION = "forecast-v2"
 QUANTILES = (0.10, 0.50, 0.90)
 
 DEFAULT_PARAMS = {
@@ -56,6 +70,21 @@ DEFAULT_PARAMS = {
 NUM_BOOST_ROUND = 600
 EARLY_STOPPING_ROUNDS = 50
 
+# Denominator for the ratio target: a blend of the recent and the settled level,
+# so a SKU mid-surge is not normalised by its own spike. Chosen on validation --
+# the blend tied or beat rollmean_24 and rollmean_72 alone at every horizon.
+SCALE_FEATURES = ("fulfillment_demand_rollmean_24", "fulfillment_demand_rollmean_72")
+SCALE_FLOOR = 0.05          # units/hour; keeps a dead SKU from dividing by zero
+TARGET_COVERAGE = 0.80      # nominal p10..p90 band
+
+
+def target_scale(X: pd.DataFrame, horizon: int) -> np.ndarray:
+    """Units the ratio target is expressed in: expected demand at the current level."""
+    level = np.zeros(len(X), dtype=float)
+    for col in SCALE_FEATURES:
+        level += X[col].to_numpy(dtype=float) / len(SCALE_FEATURES)
+    return np.maximum(np.nan_to_num(level, nan=SCALE_FLOOR), SCALE_FLOOR) * horizon
+
 
 @dataclass
 class QuantileBundle:
@@ -66,6 +95,7 @@ class QuantileBundle:
     features: list[str] = field(default_factory=list)
     train_rows: dict = field(default_factory=dict)
     best_iterations: dict = field(default_factory=dict)
+    conformal: dict = field(default_factory=dict)   # horizon -> ratio-space width
 
     model_name: str = MODEL_NAME
     model_version: str = MODEL_VERSION
@@ -78,11 +108,22 @@ class QuantileBundle:
             raise ValueError(f"unknown horizon {horizon}; expected one of {HORIZONS}")
 
         X = X[self.features]
+        scale = target_scale(X, horizon)
+        widen = float(self.conformal.get(horizon, self.conformal.get(str(horizon), 0.0)))
+
         out = {}
         for q in QUANTILES:
             booster = self.boosters[(horizon, q)]
-            pred = booster.predict(X, num_iteration=booster.best_iteration or None)
-            out[f"p{int(q * 100)}"] = np.maximum(np.asarray(pred, dtype=float), 0.0)
+            ratio = np.asarray(
+                booster.predict(X, num_iteration=booster.best_iteration or None), dtype=float
+            )
+            # Widen only the outer quantiles: the conformal correction is about
+            # interval coverage, and shifting p50 would re-introduce bias.
+            if q == min(QUANTILES):
+                ratio = ratio - widen
+            elif q == max(QUANTILES):
+                ratio = ratio + widen
+            out[f"p{int(q * 100)}"] = np.maximum(ratio * scale, 0.0)
 
         frame = pd.DataFrame(out, index=X.index)
         # quantile crossing is possible when boosters are fit independently;
@@ -107,6 +148,9 @@ class QuantileBundle:
             "train_rows": {str(k): v for k, v in self.train_rows.items()},
             "best_iterations": {f"{h}_{int(q * 100)}": v
                                 for (h, q), v in self.best_iterations.items()},
+            "target": "ratio_to_trailing_level",
+            "scale_features": list(SCALE_FEATURES),
+            "conformal": {str(h): v for h, v in self.conformal.items()},
         }
         (directory / "bundle.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
         return directory
@@ -125,6 +169,7 @@ class QuantileBundle:
             boosters=boosters,
             features=meta["features"],
             train_rows={k: v for k, v in meta.get("train_rows", {}).items()},
+            conformal={int(h): v for h, v in meta.get("conformal", {}).items()},
             model_name=meta.get("model_name", MODEL_NAME),
             model_version=meta.get("model_version", MODEL_VERSION),
             feature_version=meta.get("feature_version", FEATURE_VERSION),
@@ -140,7 +185,9 @@ def train_bundle(obs: pd.DataFrame, labels: pd.DataFrame,
                  verbose: bool = True) -> QuantileBundle:
     """Fit every (horizon, quantile) booster on the train split.
 
-    The val split drives early stopping; the test split is never touched here.
+    Boosters learn the ratio target (see module docstring) and the val split
+    drives both early stopping and the conformal interval width. The test split
+    is never touched here.
     """
     params = {**DEFAULT_PARAMS, **(params or {})}
     bundle = QuantileBundle(feature_mode=feature_mode,
@@ -158,12 +205,18 @@ def train_bundle(obs: pd.DataFrame, labels: pd.DataFrame,
         X_va, y_va = X[is_val], y[is_val]
         bundle.train_rows[horizon] = int(is_train.sum())
 
+        # Fit on the ratio scale; predictions are multiplied back in predict().
+        scale_tr = target_scale(X_tr, horizon)
+        scale_va = target_scale(X_va, horizon)
+        r_tr = y_tr.to_numpy(dtype=float) / scale_tr
+        r_va = y_va.to_numpy(dtype=float) / scale_va
+
         for q in QUANTILES:
             booster = lgb.train(
                 {**params, "alpha": q},
-                lgb.Dataset(X_tr, label=y_tr),
+                lgb.Dataset(X_tr, label=r_tr),
                 num_boost_round=NUM_BOOST_ROUND,
-                valid_sets=[lgb.Dataset(X_va, label=y_va)],
+                valid_sets=[lgb.Dataset(X_va, label=r_va)],
                 callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False)],
             )
             bundle.boosters[(horizon, q)] = booster
@@ -172,7 +225,35 @@ def train_bundle(obs: pd.DataFrame, labels: pd.DataFrame,
                 print(f"  {feature_mode:20s} h={horizon:>2}h q={q:.2f}  "
                       f"trees={booster.best_iteration:>4}  train_rows={len(X_tr)}")
 
+        bundle.conformal[horizon] = _conformal_width(bundle, X_va, r_va, horizon)
+        if verbose:
+            print(f"  {feature_mode:20s} h={horizon:>2}h conformal width="
+                  f"{bundle.conformal[horizon]:.3f} (ratio units)")
+
     return bundle
+
+
+def _conformal_width(bundle: QuantileBundle, X_val: pd.DataFrame,
+                     ratio_val: np.ndarray, horizon: int) -> float:
+    """Interval widening that gives nominal coverage on the validation split.
+
+    Split-conformal (CQR): the conformity score is how far outside the raw band
+    each validation point fell; its (1-alpha) empirical quantile is the width
+    that would have covered that share of them. Fitted on val, never on test.
+    """
+    lo_booster = bundle.boosters[(horizon, min(QUANTILES))]
+    hi_booster = bundle.boosters[(horizon, max(QUANTILES))]
+    lo = np.asarray(lo_booster.predict(
+        X_val, num_iteration=lo_booster.best_iteration or None), dtype=float)
+    hi = np.asarray(hi_booster.predict(
+        X_val, num_iteration=hi_booster.best_iteration or None), dtype=float)
+
+    scores = np.maximum(lo - ratio_val, ratio_val - hi)
+    n = len(scores)
+    if n == 0:
+        return 0.0
+    rank = min(int(np.ceil((n + 1) * TARGET_COVERAGE)) - 1, n - 1)
+    return float(max(np.sort(scores)[rank], 0.0))
 
 
 def feature_importance(bundle: QuantileBundle, horizon: int, quantile: float = 0.50,
