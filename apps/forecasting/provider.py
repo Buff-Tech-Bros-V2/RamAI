@@ -113,7 +113,10 @@ class LightGBMForecastProvider(ForecastProvider):
                              float(preds["p50"].iloc[0]),
                              float(preds["p90"].iloc[0]))
 
-            persistence = self._persistence(p10, p50, p90, horizon, cutoff, baseline)
+            if self.bundle.has_persistence(horizon):
+                persistence = round(float(self.bundle.predict_persistence(X, horizon).iloc[0]), 3)
+            else:
+                persistence = self._persistence(p10, p50, p90, horizon, cutoff, baseline)
 
             outputs.append(ForecastOutput(
                 forecast_cutoff=cutoff,
@@ -141,14 +144,16 @@ class LightGBMForecastProvider(ForecastProvider):
         path = hourly_path_from_cumulative(
             p50, horizon, hour_profile=HOUR_PROFILE, start_hour=cutoff.hour
         )
-        # Without a stored residual history, derive the spread from the model's
-        # own interval: P10/P50 and P90/P50 bound a plausible multiplier range.
-        lo, hi = max(p10 / p50, 0.05), max(p90 / p50, 1.0)
-        rng = np.random.default_rng(SCENARIO_SEED)
-        synthetic = rng.uniform(lo, hi, size=(200, 6))
-        blocks = residual_blocks(
-            synthetic.ravel(), np.ones(synthetic.size), block_hours=6
-        )
+        # Prefer empirical residual blocks from the bundle if available;
+        # fall back to interval-derived spread if the bundle has none.
+        blocks = self.bundle.residual_blocks.get(horizon)
+        if blocks is None:
+            lo, hi = max(p10 / p50, 0.05), max(p90 / p50, 1.0)
+            rng = np.random.default_rng(SCENARIO_SEED)
+            synthetic = rng.uniform(lo, hi, size=(200, 6))
+            blocks = residual_blocks(
+                synthetic.ravel(), np.ones(synthetic.size), block_hours=6
+            )
 
         scenarios = generate_scenarios(path, blocks, n_scenarios=self.n_scenarios,
                                        seed=SCENARIO_SEED)
