@@ -136,3 +136,79 @@ unchanged when operation mode switches; surge detection lead time implemented.
   `scenarios.baseline_hourly_level`). Scenario persistence compares a *mean* hourly rate,
   so the baseline must also be a mean.
 - `python` alone may not resolve the venv — use `.venv/Scripts/python.exe` on this machine.
+
+---
+
+## Next Session: Decision Engine Track (Stage 3) Roadmap
+
+Handoff guide for implementing and upgrading Stage 3 (`apps/decisionengine/`).
+
+### 1. Current State of the Decision Engine
+- **File:** `apps/decisionengine/services.py`
+- **Method:** `DecisionEngine.evaluate_actions(sku, decision_config, forecast, current_stock, now, overrides)`
+- **Input:** Real `ForecastOutput` (from Stage 2 `LightGBMForecastProvider`), current stock on hand, and merchant constraints.
+- **Output:** `DecisionResult` with 3 candidate actions (`COMMIT_NOW`, `STAGED_COMMITMENT`, `WAIT`) containing unit commitments, reevaluation time, expected contribution, fill rate, and lost units.
+- **Current Limitation:** Currently scores actions deterministically on `demand_p50` only and evaluates one SKU in isolation.
+
+### 2. Implementation Tasks for Stage 3 (PRD References)
+
+1. **Full Economic Contribution Formula (PRD Section 11):**
+   - Incorporate the complete PRD 11 objective function:
+     ```text
+     expected_contribution = delivered_revenue
+                           - production_or_procurement_cost
+                           - shipping_failure_cost
+                           - return_cost
+                           - holding_cost
+                           - residual_stock_or_markdown_cost
+                           - optional_lost_sales_penalty
+     ```
+   - Connect SKU-specific parameters from `sku_master.csv` / `DecisionConfig`:
+     - `cancel_rate` and `delivery_fail_rate` (failed delivery cost).
+     - `return_rate` (return restocking/shipping loss).
+     - `salvage_value_per_unit` (explicit terminal value for residual stock).
+
+2. **Integrate Scenario-Based Evaluation (PRD 10.3 / 11 / 12 `evaluate_actions`):**
+   - Connect `apps/forecasting/scenarios.py`:
+     ```python
+     from apps.forecasting.scenarios import generate_scenarios, hourly_path_from_cumulative
+     ```
+   - Instead of evaluating expected contribution against a single static $P50$ point, compute the expected financial return across the simulated trajectory distribution (or weighted average across $P10$, $P50$, $P90$).
+   - Use `forecast.surge_persistence_probability` to dynamically penalize or reward staged commitment vs waiting.
+
+3. **Explicit Opportunity Cost of Waiting (PRD Section 19 Acceptance Criteria):**
+   - PRD 19 requires: *"Waiting action mempunyai opportunity cost eksplisit."*
+   - Explicitly calculate lost gross margin (`(price - cost) * lost_units`) and reputation penalty when choosing `WAIT` during an active viral surge.
+
+4. **Multi-SKU Joint Capacity & Capital Allocation (PRD FR-O07 & Scenario C):**
+   - Implement cross-SKU optimization when shared shop capacity (e.g. 480 minutes/day) or working capital binds between multiple surging SKUs (Scenario C: `SKU-001` Sambal and `SKU-003` Kopi Susu surging simultaneously).
+   - Method: Rank candidate actions by marginal contribution per bottleneck resource (e.g. `expected_contribution / capacity_minutes`) or solve via small linear program / candidate enumeration.
+
+5. **Fast What-If Sensitivity Recalculation (PRD FR-U05):**
+   - Support slider overrides from dashboard GET parameters (`daily_capacity_minutes`, `working_capital_limit`, `commitment_deadline`) and return recalculated action rankings within < 1 second without touching the forecasting model.
+
+### 3. Verification & Test Commands for Stage 3
+
+```bash
+# 1. Ensure database has official simulator data
+.venv/Scripts/python.exe manage.py seed_dummy_data --flush
+
+# 2. Test Agent run across all SKUs
+.venv/Scripts/python.exe -c "
+import os, django; os.environ['DJANGO_SETTINGS_MODULE']='config.settings'; django.setup()
+from apps.skus.models import SKU; from apps.agent.orchestrator import Agent
+agent = Agent()
+for s in SKU.objects.all():
+    res = agent.run(s)
+    print(s.sku_id, res['decision'].recommended.action, 'Contrib:', res['decision'].recommended.expected_contribution)
+"
+
+# 3. Test Dashboard endpoint with what-if parameters
+.venv/Scripts/python.exe -c "
+import os, django; os.environ['DJANGO_SETTINGS_MODULE']='config.settings'; django.setup()
+from django.test import RequestFactory; from apps.dashboard.views import index
+rf = RequestFactory()
+req = rf.get('/dashboard/?sku=SKU-001&capital=1000000&capacity_minutes=600')
+print('Status:', index(req).status_code)
+"
+```
