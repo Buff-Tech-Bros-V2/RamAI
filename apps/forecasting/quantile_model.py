@@ -260,8 +260,11 @@ def train_bundle(obs: pd.DataFrame, labels: pd.DataFrame,
         r_va = y_va.to_numpy(dtype=float) / scale_va
 
         for q in QUANTILES:
+            q_params = dict(params)
+            if q == 0.90:
+                q_params.update({"learning_rate": 0.02, "num_leaves": 15, "min_data_in_leaf": 50})
             booster = lgb.train(
-                {**params, "alpha": q},
+                {**q_params, "alpha": q},
                 lgb.Dataset(X_tr, label=r_tr),
                 num_boost_round=NUM_BOOST_ROUND,
                 valid_sets=[lgb.Dataset(X_va, label=r_va)],
