@@ -1,0 +1,25 @@
+{% load humanize %}
+<div class="col">
+    <div class="card h-100 {% if is_recommended %}border-primary border-2 shadow-sm{% endif %}">
+        <div class="card-body">
+            <h5 class="card-title d-flex justify-content-between align-items-start">
+                <span>
+                    {% if candidate.action == "COMMIT_NOW" %}Commit Sekarang
+                    {% elif candidate.action == "STAGED_COMMITMENT" %}Commit Bertahap
+                    {% else %}Tunggu Dulu{% endif %}
+                </span>
+                {% if is_recommended %}<span class="badge text-bg-primary">Rekomendasi</span>{% endif %}
+            </h5>
+            <ul class="list-unstyled small mb-0">
+                <li>Commit sekarang: <strong>{{ candidate.commit_now_units }} unit</strong></li>
+                <li>Commit susulan: <strong>{{ candidate.commit_later_units }} unit</strong></li>
+                <li>Evaluasi ulang: {{ candidate.reevaluate_at|date:"d M H:i" }}</li>
+                <li>Modal dibutuhkan: Rp{{ candidate.required_capital|floatformat:0|intcomma }}</li>
+                <li>Expected contribution: Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}</li>
+                <li>Fill rate: {{ candidate.expected_fill_rate|floatformat:2 }}</li>
+                <li>Lost sales: {{ candidate.expected_lost_units }} unit</li>
+                <li>Residual-stock risk: {{ candidate.residual_stock_risk_units }} unit</li>
+            </ul>
+        </div>
+    </div>
+</div>
