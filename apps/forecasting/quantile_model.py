@@ -47,6 +47,8 @@ from .features import (
     build_training_frame,
     feature_columns,
 )
+from .evaluation import baseline_hourly_series
+from .scenarios import residual_blocks
 
 MODEL_NAME = "lightgbm_quantile"
 MODEL_VERSION = "forecast-v2"
@@ -77,6 +79,22 @@ SCALE_FEATURES = ("fulfillment_demand_rollmean_24", "fulfillment_demand_rollmean
 SCALE_FLOOR = 0.05          # units/hour; keeps a dead SKU from dividing by zero
 TARGET_COVERAGE = 0.80      # nominal p10..p90 band
 
+PERSISTENCE_PARAMS = {
+    "objective": "binary",
+    "metric": "auc",
+    "learning_rate": 0.03,
+    "num_leaves": 15,
+    "min_data_in_leaf": 40,
+    "feature_fraction": 0.85,
+    "bagging_fraction": 0.85,
+    "bagging_freq": 1,
+    "lambda_l2": 1.0,
+    "verbosity": -1,
+    "num_threads": 0,
+    "seed": 42,
+}
+PERSISTENCE_THRESHOLD = 1.2
+
 
 def target_scale(X: pd.DataFrame, horizon: int) -> np.ndarray:
     """Units the ratio target is expressed in: expected demand at the current level."""
@@ -92,6 +110,8 @@ class QuantileBundle:
 
     feature_mode: str
     boosters: dict = field(default_factory=dict)
+    persistence_boosters: dict = field(default_factory=dict)
+    residual_blocks: dict = field(default_factory=dict)
     features: list[str] = field(default_factory=list)
     train_rows: dict = field(default_factory=dict)
     best_iterations: dict = field(default_factory=dict)
@@ -131,12 +151,28 @@ class QuantileBundle:
         sorted_vals = np.sort(frame.to_numpy(), axis=1)
         return pd.DataFrame(sorted_vals, columns=["p10", "p50", "p90"], index=X.index)
 
+    def has_persistence(self, horizon: int) -> bool:
+        return horizon in self.persistence_boosters
+
+    def predict_persistence(self, X: pd.DataFrame, horizon: int) -> pd.Series:
+        """Return probability of surge persistence over the horizon (FR-F05)."""
+        if horizon not in self.persistence_boosters:
+            raise KeyError(f"no persistence booster for horizon {horizon}")
+        booster = self.persistence_boosters[horizon]
+        X_feat = X[self.features]
+        prob = booster.predict(X_feat, num_iteration=booster.best_iteration or None)
+        return pd.Series(np.clip(prob, 0.0, 1.0), index=X.index)
+
     # --------------------------------------------------------------- io ----
     def save(self, directory: str | Path) -> Path:
         directory = Path(directory)
         directory.mkdir(parents=True, exist_ok=True)
         for (horizon, q), booster in self.boosters.items():
             booster.save_model(str(directory / f"h{horizon}_q{int(q * 100)}.txt"))
+        for horizon, booster in self.persistence_boosters.items():
+            booster.save_model(str(directory / f"h{horizon}_persistence.txt"))
+        for horizon, blocks in self.residual_blocks.items():
+            np.save(str(directory / f"h{horizon}_residuals.npy"), blocks)
         meta = {
             "feature_mode": self.feature_mode,
             "features": self.features,
@@ -145,6 +181,7 @@ class QuantileBundle:
             "feature_version": self.feature_version,
             "horizons": list(HORIZONS),
             "quantiles": list(QUANTILES),
+            "has_persistence": {str(h): (h in self.persistence_boosters) for h in HORIZONS},
             "train_rows": {str(k): v for k, v in self.train_rows.items()},
             "best_iterations": {f"{h}_{int(q * 100)}": v
                                 for (h, q), v in self.best_iterations.items()},
@@ -160,13 +197,23 @@ class QuantileBundle:
         directory = Path(directory)
         meta = json.loads((directory / "bundle.json").read_text(encoding="utf-8"))
         boosters = {}
+        persistence_boosters = {}
+        residual_blocks_map = {}
         for horizon in meta["horizons"]:
             for q in meta["quantiles"]:
                 path = directory / f"h{horizon}_q{int(q * 100)}.txt"
                 boosters[(horizon, q)] = lgb.Booster(model_file=str(path))
+            p_path = directory / f"h{horizon}_persistence.txt"
+            if p_path.exists():
+                persistence_boosters[horizon] = lgb.Booster(model_file=str(p_path))
+            r_path = directory / f"h{horizon}_residuals.npy"
+            if r_path.exists():
+                residual_blocks_map[horizon] = np.load(str(r_path))
         return cls(
             feature_mode=meta["feature_mode"],
             boosters=boosters,
+            persistence_boosters=persistence_boosters,
+            residual_blocks=residual_blocks_map,
             features=meta["features"],
             train_rows={k: v for k, v in meta.get("train_rows", {}).items()},
             conformal={int(h): v for h, v in meta.get("conformal", {}).items()},
@@ -192,6 +239,7 @@ def train_bundle(obs: pd.DataFrame, labels: pd.DataFrame,
     params = {**DEFAULT_PARAMS, **(params or {})}
     bundle = QuantileBundle(feature_mode=feature_mode,
                             features=feature_columns(feature_mode))
+    base_df = baseline_hourly_series(obs)
 
     for horizon in horizons:
         X, y, meta = build_training_frame(obs, labels, horizon=horizon,
@@ -212,8 +260,11 @@ def train_bundle(obs: pd.DataFrame, labels: pd.DataFrame,
         r_va = y_va.to_numpy(dtype=float) / scale_va
 
         for q in QUANTILES:
+            q_params = dict(params)
+            if q == 0.90:
+                q_params.update({"learning_rate": 0.02, "num_leaves": 15, "min_data_in_leaf": 50})
             booster = lgb.train(
-                {**params, "alpha": q},
+                {**q_params, "alpha": q},
                 lgb.Dataset(X_tr, label=r_tr),
                 num_boost_round=NUM_BOOST_ROUND,
                 valid_sets=[lgb.Dataset(X_va, label=r_va)],
@@ -229,6 +280,43 @@ def train_bundle(obs: pd.DataFrame, labels: pd.DataFrame,
         if verbose:
             print(f"  {feature_mode:20s} h={horizon:>2}h conformal width="
                   f"{bundle.conformal[horizon]:.3f} (ratio units)")
+
+        # Fit persistence classifier (FR-F05)
+        meta_base = meta.merge(base_df, on=["timestamp", "sku_id"], how="left")
+        rate_tr = y_tr.to_numpy(dtype=float) / horizon
+        base_tr = meta_base.loc[is_train, "baseline_hourly"].to_numpy(dtype=float)
+        ok_tr = np.isfinite(base_tr) & (base_tr > 0)
+
+        rate_va = y_va.to_numpy(dtype=float) / horizon
+        base_va = meta_base.loc[is_val, "baseline_hourly"].to_numpy(dtype=float)
+        ok_va = np.isfinite(base_va) & (base_va > 0)
+
+        persist_tr = (rate_tr >= PERSISTENCE_THRESHOLD * base_tr).astype(int)
+        persist_va = (rate_va >= PERSISTENCE_THRESHOLD * base_va).astype(int)
+
+        if ok_tr.sum() > 0 and ok_va.sum() > 0:
+            p_booster = lgb.train(
+                PERSISTENCE_PARAMS,
+                lgb.Dataset(X_tr[ok_tr], label=persist_tr[ok_tr]),
+                num_boost_round=NUM_BOOST_ROUND,
+                valid_sets=[lgb.Dataset(X_va[ok_va], label=persist_va[ok_va])],
+                callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False)],
+            )
+            bundle.persistence_boosters[horizon] = p_booster
+            if verbose:
+                print(f"  {feature_mode:20s} h={horizon:>2}h persistence  "
+                      f"trees={p_booster.best_iteration:>4}")
+
+        # Extract empirical residual blocks from validation predictions
+        p50_booster = bundle.boosters[(horizon, 0.50)]
+        pred_r_va = np.asarray(
+            p50_booster.predict(X_va, num_iteration=p50_booster.best_iteration or None),
+            dtype=float,
+        )
+        pred_p50_va = np.maximum(pred_r_va * scale_va, 0.0)
+        bundle.residual_blocks[horizon] = residual_blocks(
+            y_va.to_numpy(dtype=float), pred_p50_va, block_hours=6
+        )
 
     return bundle
 

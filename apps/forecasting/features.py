@@ -31,7 +31,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-FEATURE_VERSION = "features-v1"
+FEATURE_VERSION = "features-v2"
 
 MODE_TRANSACTION = "transaction"
 MODE_CONTENT = "transaction_content"
@@ -39,8 +39,9 @@ FEATURE_MODES = (MODE_TRANSACTION, MODE_CONTENT)
 
 HORIZONS = (24, 48, 72)
 
-LAGS = (1, 2, 3, 6, 12, 24, 48, 168)
+LAGS = (1, 2, 3, 6, 12, 24, 48, 72, 168)
 ROLL_WINDOWS = (6, 24, 72)
+CONTENT_LAGS = (1, 3, 6, 24, 48)
 
 CONTENT_COLUMNS = [
     "product_views",
@@ -135,7 +136,7 @@ def feature_columns(feature_mode: str = MODE_CONTENT) -> list[str]:
 
     if feature_mode == MODE_CONTENT:
         cols += list(CONTENT_COLUMNS)
-        cols += [f"{c}_lag_{lag}" for c in CONTENT_COLUMNS for lag in (1, 3, 6, 24)]
+        cols += [f"{c}_lag_{lag}" for c in CONTENT_COLUMNS for lag in CONTENT_LAGS]
         cols += [
             "content_view_velocity_rollmean_6",
             "content_view_velocity_growth_6",
@@ -221,7 +222,7 @@ def build_features(obs: pd.DataFrame, feature_mode: str = MODE_CONTENT) -> pd.Da
             df[col] = df[col].astype(float)
         cg = df.groupby("sku_id", sort=False)
         for col in CONTENT_COLUMNS:
-            for lag in (1, 3, 6, 24):
+            for lag in CONTENT_LAGS:
                 df[f"{col}_lag_{lag}"] = cg[col].shift(lag)
         df["content_view_velocity_rollmean_6"] = cg["content_view_velocity"].transform(
             lambda x: x.rolling(6, min_periods=1).mean()

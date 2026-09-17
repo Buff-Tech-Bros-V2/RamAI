@@ -1,0 +1,345 @@
+{% load humanize static %}
+
+<!-- ===== Intro Banner ===== -->
+<div class="intro-banner animate-in">
+    <strong>Cara baca halaman ini:</strong> Order produk ini lagi naik. Sistem menebak apakah
+    kenaikannya bakal lanjut atau reda, lalu menyodorkan 3 pilihan — beli/produksi banyak
+    sekarang, sedikit dulu baru tambah, atau tunggu dulu — lengkap dengan modal dan risikonya.
+    Kamu yang mutusin, sistem cuma bantu ngitung.
+</div>
+
+<!-- ===== SKU Header ===== -->
+<div class="sku-hero animate-in" style="margin-bottom: var(--space-4);">
+    <div class="sku-hero-left">
+        <h1>{{ sku.sku_id }} — {{ sku.name }}</h1>
+        <div class="sku-hero-meta">
+            <span>{{ sku.product_category }}</span>
+            {% if sku.demo_scenario %}
+            <span class="scenario-badge">{{ sku.demo_scenario }}</span>
+            {% endif %}
+        </div>
+    </div>
+    <div style="text-align: right; font-size: 12px; color: var(--ram-muted-500);">
+        Dihitung pada {{ result.now|date:"d M Y H:i" }}
+    </div>
+</div>
+
+<!-- ===== Warnings & Alerts ===== -->
+{% for w in result.warnings %}
+<div class="ram-alert ram-alert-warning animate-in">
+    <span class="ram-alert-icon">⚠</span>
+    <span>{{ w }}</span>
+</div>
+{% endfor %}
+{% if not result.forecast_48h.content_features_used %}
+<div class="ram-alert ram-alert-info animate-in">
+    <span class="ram-alert-icon">ℹ</span>
+    <span>Sinyal konten/affiliate tidak tersedia untuk SKU ini — forecast memakai data transaksi saja (fallback
+        state).</span>
+</div>
+{% endif %}
+
+<!-- ===== Stat Cards ===== -->
+<div class="stats-grid">
+    <div class="stat-card teal animate-in">
+        <div class="stat-card-header">
+            <span class="stat-label">Stok Saat Ini</span>
+            <div class="stat-card-icon teal-bg">📦</div>
+        </div>
+        <div class="stat-value" data-animate-number="{{ result.current_stock }}" data-animate-suffix=" unit">
+            {{ result.current_stock }} unit
+        </div>
+    </div>
+
+    <div class="stat-card navy animate-in">
+        <div class="stat-card-header">
+            <span class="stat-label">Jenis Kegiatan</span>
+            <div class="stat-card-icon navy-bg">⚙</div>
+        </div>
+        <div class="stat-value" style="font-size: 18px;">{{ decision_config.operation_mode }}</div>
+        <div class="stat-sub">{{ decision_config.constraint_profile }}</div>
+    </div>
+
+    <div class="stat-card coral animate-in">
+        <div class="stat-card-header">
+            <span class="stat-label">Batas Waktu Keputusan</span>
+            <div class="stat-card-icon coral-bg">⏰</div>
+        </div>
+        <div class="stat-value" style="font-size: 16px;">{{ decision_config.commitment_deadline|date:"d M Y H:i" }}
+        </div>
+        <div class="stat-sub" id="deadline-countdown"
+            data-deadline="{{ decision_config.commitment_deadline|date:'c' }}">
+            Menghitung...
+        </div>
+    </div>
+
+    <div class="stat-card orange animate-in">
+        <div class="stat-card-header">
+            <span class="stat-label">Kemungkinan Rame Lanjut 48j</span>
+            <div class="stat-card-icon orange-bg">🔥</div>
+        </div>
+        <div class="stat-value">{% widthratio result.decision.surge_persistence_48h 1 100 %}%</div>
+        <div class="stat-sub">
+            Keyakinan:
+            <span class="confidence-badge confidence-{{ result.decision.confidence|lower }}">
+                {{ result.decision.confidence }}
+            </span>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Charts Section ===== -->
+<div class="charts-grid">
+    <!-- Chart 1: Demand Overview -->
+    <div class="chart-card animate-in">
+        <div class="chart-card-header">
+            <div>
+                <div class="chart-card-title">Order Masuk (24 Jam Terakhir)</div>
+                <div class="chart-card-subtitle">Jumlah order per jam & level stok</div>
+            </div>
+        </div>
+        <div class="chart-wrapper">
+            <canvas id="demandChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Chart 2: Forecast Comparison -->
+    <div class="chart-card animate-in">
+        <div class="chart-card-header">
+            <div>
+                <div class="chart-card-title">Tebakan Total Order ke Depan</div>
+                <div class="chart-card-subtitle">Pesimis (P10), Wajar (P50), Optimis (P90)</div>
+            </div>
+        </div>
+        <div class="chart-wrapper">
+            <canvas id="forecastChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Inline chart data (read by charts.js) -->
+<script type="application/json" id="demand-chart-data">{{ chart_data_json|safe }}</script>
+<script>
+    // Parse combined data and create separate elements for charts.js
+    (function () {
+        try {
+            var combined = JSON.parse(document.getElementById('demand-chart-data').textContent);
+
+            // Create demand data element
+            var demandEl = document.getElementById('demand-chart-data');
+            demandEl.textContent = JSON.stringify(combined.demand);
+
+            // Create forecast data element
+            var fcEl = document.createElement('script');
+            fcEl.type = 'application/json';
+            fcEl.id = 'forecast-chart-data';
+            fcEl.textContent = JSON.stringify(combined.forecast);
+            document.body.appendChild(fcEl);
+        } catch (e) { }
+    })();
+</script>
+
+<!-- ===== Forecast Table (compact) ===== -->
+<div class="section-header">
+    <div class="section-icon teal">📊</div>
+    <h2>Perkiraan Demand</h2>
+</div>
+
+<div class="ram-table-wrapper animate-in" style="margin-bottom: var(--space-8);">
+    <table class="ram-table">
+        <thead>
+            <tr>
+                <th>Sampai</th>
+                <th class="text-end">Pesimis (P10)</th>
+                <th class="text-end">Wajar (P50)</th>
+                <th class="text-end">Optimis (P90)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in result.forecasts %}
+            <tr>
+                <td>{{ f.horizon_hours }} jam lagi</td>
+                <td class="text-end">{{ f.p10 }}</td>
+                <td class="text-end"><strong>{{ f.p50 }}</strong></td>
+                <td class="text-end">{{ f.p90 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div style="font-size: 11px; color: var(--ram-muted-500); margin-top: -24px; margin-bottom: var(--space-8);">
+    "Wajar" dipakai sebagai perkiraan utama; "pesimis" dan "optimis" nunjukin rentang
+    kalau tebakannya meleset. Model: <strong>{{ result.forecast_48h.model_name }}</strong>
+    ({{ result.forecast_48h.model_version }}){% if "dummy" in result.forecast_48h.model_name %} — <em>placeholder, belum model regresi asli.</em>{% endif %}
+</div>
+
+<!-- ===== Action Cards ===== -->
+<div class="section-header" id="actions-section">
+    <div class="section-icon orange">🎯</div>
+    <h2>Pilihan Tindakan</h2>
+</div>
+
+<div class="actions-grid">
+    {% include "dashboard/_action_card.html" with candidate=result.decision.recommended is_recommended=True %}
+    {% for alt in result.decision.alternatives %}
+    {% include "dashboard/_action_card.html" with candidate=alt is_recommended=False %}
+    {% endfor %}
+</div>
+
+<!-- ===== Explanation + What-if ===== -->
+<div class="explain-whatif-grid">
+    <!-- Explanation Panel -->
+    <div class="explanation-card animate-in">
+        <div class="section-header" style="margin-bottom: var(--space-4);">
+            <div class="section-icon teal">💬</div>
+            <h2>Penjelasan Sistem</h2>
+        </div>
+        <div class="explanation-text">{{ result.explanation_text }}</div>
+        <div class="explanation-note">
+            {% if result.is_llm %}
+            Didukung oleh Google Gemini (schema-validated AI explainer).
+            {% else %}
+            Mengisi template terstruktur dari angka di atas (fallback deterministik).
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- What-if Panel -->
+    <div class="whatif-card animate-in">
+        <div class="card-title">Coba Ubah Kondisinya</div>
+        <div class="card-desc">
+            Misalnya modal lebih terbatas, atau deadline dimajukan — sistem hitung ulang rekomendasinya.
+        </div>
+
+        <form method="get" action="" id="whatif-form">
+            <input type="hidden" name="sku" value="{{ sku.sku_id }}">
+
+            <div class="ram-form-group">
+                <label class="ram-label" for="wf-capacity">Kapasitas produksi (menit/hari)</label>
+                <input id="wf-capacity" type="number" name="capacity_minutes" class="ram-input"
+                    value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes }}">
+            </div>
+
+            <div class="ram-form-group">
+                <label class="ram-label" for="wf-capital">Modal kerja tersedia (Rp)</label>
+                <input id="wf-capital" type="number" name="capital" class="ram-input"
+                    value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit }}">
+            </div>
+
+            <div class="ram-form-group">
+                <label class="ram-label" for="wf-deadline">Batas waktu ambil keputusan</label>
+                <input id="wf-deadline" type="datetime-local" name="deadline" class="ram-input"
+                    value="{{ decision_config.commitment_deadline|date:'Y-m-d\TH:i' }}">
+            </div>
+
+            <button type="submit" class="ram-btn ram-btn-outline ram-btn-full" style="margin-bottom: var(--space-4);">
+                🔄 Hitung Ulang Rekomendasi
+            </button>
+        </form>
+
+        <hr class="ram-divider" style="margin: var(--space-4) 0;">
+
+        <form method="post" action="{% url 'dashboard:approve_plan' sku.sku_id %}">
+            {% csrf_token %}
+            <button type="submit" class="ram-btn ram-btn-primary ram-btn-full ram-btn-lg">
+                ✓ Setuju, Catat Sebagai Rencana
+            </button>
+        </form>
+        <div style="font-size: 11px; color: var(--ram-muted-500); margin-top: var(--space-2); text-align: center;">
+            Ini cuma nyimpen catatan persetujuan — belum benar-benar belanja/produksi otomatis.
+        </div>
+    </div>
+</div>
+
+<!-- ===== Assumptions & Data Quality (collapsible) ===== -->
+<div class="assumptions-section animate-in">
+    <div class="assumptions-card">
+        <button class="assumptions-toggle" data-toggle-collapse="assumptions-body" aria-expanded="false">
+            <span>📋 Asumsi yang Dipakai & Catatan Kelengkapan Data</span>
+            <span class="toggle-icon">▼</span>
+        </button>
+        <div class="collapsible-body" id="assumptions-body">
+            <div class="assumptions-body">
+                <ul class="assumptions-list">
+                    {% for a in result.decision.assumptions %}
+                    <li>{{ a }}</li>
+                    {% endfor %}
+                    {% for f in result.forecast_48h.data_quality_flags %}
+                    <li class="data-quality-item">Catatan data: {{ f }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== Order History Table ===== -->
+<div class="section-header">
+    <div class="section-icon teal">📋</div>
+    <h2>Order Asli (24 Jam Terakhir)</h2>
+</div>
+
+<div class="ram-table-wrapper animate-in" style="margin-bottom: var(--space-8);">
+    <div class="scroll-table-body">
+        <table class="ram-table">
+            <thead>
+                <tr>
+                    <th>Jam</th>
+                    <th class="text-end">Orders</th>
+                    <th class="text-end">Stok</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for obs in recent_history %}
+                <tr>
+                    <td>{{ obs.timestamp|date:"d M H:i" }}</td>
+                    <td class="text-end"><strong>{{ obs.orders_created }}</strong></td>
+                    <td class="text-end">{{ obs.stock_on_hand }}</td>
+                    <td>
+                        {% if obs.stockout_flag %}
+                        <span class="badge-stockout">⚠ stockout</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ===== Draft Plans ===== -->
+{% if drafts %}
+<div class="drafts-section animate-in">
+    <div class="section-header">
+        <div class="section-icon teal">📝</div>
+        <h2>Draf Rencana Tersimpan</h2>
+    </div>
+
+    <div class="ram-table-wrapper">
+        <table class="ram-table">
+            <thead>
+                <tr>
+                    <th>Waktu</th>
+                    <th>Aksi</th>
+                    <th class="text-end">Unit Sekarang</th>
+                    <th class="text-end">Unit Susulan</th>
+                    <th class="text-end">Modal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in drafts %}
+                <tr>
+                    <td>{{ d.approved_at|date:"d M H:i" }}</td>
+                    <td>{{ d.recommended_action }}</td>
+                    <td class="text-end">{{ d.commit_now_units }}</td>
+                    <td class="text-end">{{ d.commit_later_units }}</td>
+                    <td class="text-end">Rp{{ d.required_capital|floatformat:0|intcomma }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}

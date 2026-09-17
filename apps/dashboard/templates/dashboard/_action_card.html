@@ -1,51 +1,86 @@
 {% load humanize %}
-<div class="col">
-    <div class="card h-100 {% if is_recommended %}border-primary border-2 shadow-sm{% endif %}">
-        <div class="card-body">
-            <h5 class="card-title d-flex justify-content-between align-items-start mb-1">
-                <span>
-                    {% if candidate.action == "COMMIT_NOW" %}Beli/Produksi Banyak Sekarang
-                    {% elif candidate.action == "STAGED_COMMITMENT" %}Sedikit Dulu, Tambah Nanti
-                    {% else %}Tunggu Dulu{% endif %}
-                </span>
-                {% if is_recommended %}<span class="badge text-bg-primary ms-1">Rekomendasi</span>{% endif %}
-            </h5>
-            <p class="text-muted small mb-3">
-                {% if candidate.action == "COMMIT_NOW" %}
-                    Aman dari kehabisan stok, tapi modal keluar besar dari awal.
-                {% elif candidate.action == "STAGED_COMMITMENT" %}
-                    Modal lebih kecil dulu, nambah lagi kalau ramainya kebukti beneran.
-                {% else %}
-                    Hemat modal sekarang, tapi risiko kehabisan stok kalau ternyata masih ramai.
-                {% endif %}
-            </p>
-            <ul class="list-unstyled small mb-0">
-                <li class="mb-2">
-                    <div>Beli/produksi sekarang: <strong>{{ candidate.commit_now_units }} unit</strong></div>
-                    <div>Nyusul nanti: <strong>{{ candidate.commit_later_units }} unit</strong></div>
-                    <div class="text-muted">Cek lagi kondisi pada {{ candidate.reevaluate_at|date:"d M, H:i" }}</div>
-                </li>
-                <li class="mb-2">
-                    <div>Modal yang harus dikeluarkan</div>
-                    <div class="fs-5">Rp{{ candidate.required_capital|floatformat:0|intcomma }}</div>
-                </li>
-                <li class="mb-2">
-                    <div>Estimasi untung bersih <span class="text-muted">(expected contribution)</span></div>
-                    <div class="fs-5">Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}</div>
-                </li>
-                <li class="mb-1">
-                    <span class="text-muted">Persen pembeli yang kebagian barang:</span>
-                    <strong>{% widthratio candidate.expected_fill_rate 1 100 %}%</strong>
-                </li>
-                <li class="mb-1">
-                    <span class="text-muted">Penjualan hilang karena stok kurang:</span>
-                    <strong>{{ candidate.expected_lost_units }} unit</strong>
-                </li>
-                <li>
-                    <span class="text-muted">Barang berpotensi nyisa gak kejual:</span>
-                    <strong>{{ candidate.residual_stock_risk_units }} unit</strong>
-                </li>
-            </ul>
+
+<div
+    class="action-card animate-in {% if is_recommended %}recommended{% endif %} {% if candidate.action == 'COMMIT_NOW' %}type-commit-now{% elif candidate.action == 'STAGED_COMMITMENT' %}type-staged{% else %}type-wait{% endif %}">
+    <div class="action-card-accent"></div>
+
+    <!-- Header -->
+    <div class="action-card-head">
+        <div class="action-card-title">
+            {% if candidate.action == "COMMIT_NOW" %}
+            Beli/Produksi Sekarang
+            {% elif candidate.action == "STAGED_COMMITMENT" %}
+            Sedikit Dulu, Tambah Nanti
+            {% else %}
+            Tunggu Dulu
+            {% endif %}
+        </div>
+        {% if is_recommended %}
+        <span class="recommended-badge">★ Rekomendasi</span>
+        {% endif %}
+    </div>
+
+    <!-- Description -->
+    <div class="action-card-desc">
+        {% if candidate.action == "COMMIT_NOW" %}
+        Aman dari kehabisan stok, tapi modal keluar besar dari awal.
+        {% elif candidate.action == "STAGED_COMMITMENT" %}
+        Modal lebih kecil dulu, nambah lagi kalau ramainya kebukti beneran.
+        {% else %}
+        Hemat modal sekarang, tapi risiko kehabisan stok kalau ternyata masih ramai.
+        {% endif %}
+    </div>
+
+    <!-- Unit Info Box -->
+    <div class="action-unit-info">
+        <div class="action-unit-row">
+            <span class="unit-label">Beli/produksi sekarang</span>
+            <span class="unit-value">{{ candidate.commit_now_units }} unit</span>
+        </div>
+        <div class="action-unit-row">
+            <span class="unit-label">Nyusul nanti</span>
+            <span class="unit-value">{{ candidate.commit_later_units }} unit</span>
+        </div>
+        <div class="action-reeval">↻ Cek lagi pada {{ candidate.reevaluate_at|date:"d M, H:i" }}</div>
+    </div>
+
+    <!-- Key Metrics -->
+    <div class="action-metrics">
+        <!-- Modal -->
+        <div class="action-metric">
+            <span class="action-metric-label">Modal yang dikeluarkan</span>
+            <span class="action-metric-value">Rp{{ candidate.required_capital|floatformat:0|intcomma }}</span>
+        </div>
+
+        <!-- Expected Contribution -->
+        <div class="action-metric">
+            <span class="action-metric-label">Estimasi untung bersih</span>
+            <span
+                class="action-metric-value {% if candidate.expected_contribution > 0 %}positive{% elif candidate.expected_contribution < 0 %}negative{% endif %}">
+                Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}
+            </span>
+        </div>
+
+        <!-- Fill Rate -->
+        <div class="action-metric-row">
+            <span class="metric-label">Pembeli yang kebagian</span>
+            <span class="metric-value success">{% widthratio candidate.expected_fill_rate 1 100 %}%</span>
+        </div>
+        <div class="fill-rate-bar">
+            {% widthratio candidate.expected_fill_rate 1 100 as fill_rate %}
+            <div class="fill-rate-bar-fill" style="width: {{ fill_rate }}%;"></div>
+        </div>
+
+        <!-- Lost Sales -->
+        <div class="action-metric-row">
+            <span class="metric-label">Penjualan hilang (stok kurang)</span>
+            <span class="metric-value risk">{{ candidate.expected_lost_units }} unit</span>
+        </div>
+
+        <!-- Residual Stock -->
+        <div class="action-metric-row">
+            <span class="metric-label">Barang berpotensi nyisa</span>
+            <span class="metric-value risk">{{ candidate.residual_stock_risk_units }} unit</span>
         </div>
     </div>
 </div>

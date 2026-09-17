@@ -12,7 +12,9 @@ for UI development. Replace/extend when the real simulator is built.
 import math
 import random
 from datetime import timedelta
+from pathlib import Path
 
+import pandas as pd
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -106,15 +108,37 @@ class Command(BaseCommand):
             action="store_true",
             help="Delete existing SKUs/observations before seeding.",
         )
+        parser.add_argument(
+            "--data-dir",
+            default="data",
+            help="Directory containing simulator files (default: data).",
+        )
+        parser.add_argument(
+            "--use-sine-waves",
+            action="store_true",
+            help="Force using the heuristic sine-wave generator instead of simulator parquet files.",
+        )
 
     def handle(self, *args, **options):
         rng = random.Random(SEED)
+        data_dir = Path(options["data_dir"])
 
         if options["flush"]:
             HourlyObservation.objects.all().delete()
             DecisionConfig.objects.all().delete()
             SKU.objects.all().delete()
             self.stdout.write("Cleared existing SKU data.")
+
+        # If official simulator dataset exists, load it directly (Stage 1 -> Stage 2 integration)
+        if (
+            (data_dir / "hourly_observations.parquet").exists()
+            and (data_dir / "sku_master.csv").exists()
+            and not options["use_sine_waves"]
+        ):
+            self.stdout.write(f"Loading official simulator data from {data_dir} ...")
+            self._seed_from_simulator(data_dir)
+            self.stdout.write(self.style.SUCCESS("Simulator data seeding complete."))
+            return
 
         now = timezone.now().replace(minute=0, second=0, microsecond=0)
 
@@ -152,6 +176,123 @@ class Command(BaseCommand):
             self.stdout.write(f"Seeded {sku.sku_id} ({scenario['demo_scenario']}).")
 
         self.stdout.write(self.style.SUCCESS("Dummy data seeding complete."))
+
+    def _seed_from_simulator(self, data_dir: Path):
+        sku_master = pd.read_csv(data_dir / "sku_master.csv")
+        decision_cfg = (
+            pd.read_csv(data_dir / "decision_config.csv")
+            if (data_dir / "decision_config.csv").exists()
+            else None
+        )
+        obs_df = pd.read_parquet(data_dir / "hourly_observations.parquet")
+
+        scenario_map = {
+            "SKU-001": "Persistent surge (Scenario B)",
+            "SKU-002": "Fading surge (Scenario A)",
+            "SKU-003": "Capacity conflict (Scenario C)",
+            "SKU-004": "Baseline, content signal missing",
+            "SKU-005": "Slow burn surge",
+        }
+
+        # 1. Seed SKUs
+        sku_objs = {}
+        for _, row in sku_master.iterrows():
+            sku_id = str(row["sku_id"])
+            sku, _ = SKU.objects.update_or_create(
+                sku_id=sku_id,
+                defaults={
+                    "name": str(row["product_name"]),
+                    "product_category": str(row["product_category"]),
+                    "shop_id": "SHOP-DEMO-01",
+                    "demo_scenario": scenario_map.get(sku_id, ""),
+                },
+            )
+            sku_objs[sku_id] = sku
+
+        # 2. Seed DecisionConfigs
+        if decision_cfg is not None:
+            for _, row in decision_cfg.iterrows():
+                sku_id = str(row["sku_id"])
+                if sku_id not in sku_objs:
+                    continue
+                sku = sku_objs[sku_id]
+                lead_time = (
+                    None
+                    if pd.isna(row.get("supplier_lead_time_hours"))
+                    else float(row["supplier_lead_time_hours"])
+                )
+                deadline = pd.to_datetime(row["commitment_deadline"])
+                if timezone.is_naive(deadline):
+                    deadline = timezone.make_aware(deadline)
+
+                DecisionConfig.objects.update_or_create(
+                    sku=sku,
+                    defaults={
+                        "operation_mode": str(row.get("operation_mode", "PRODUCTION")),
+                        "constraint_profile": str(row.get("constraint_profile", "FOOD_DEMO")),
+                        "unit_selling_price": float(row["unit_selling_price"]),
+                        "unit_variable_cost": float(row["unit_variable_cost"]),
+                        "production_minutes_per_unit": float(row["production_minutes_per_unit"]),
+                        "material_per_unit": float(row["material_per_unit"]),
+                        "supplier_lead_time_hours": lead_time,
+                        "minimum_commitment": int(row["minimum_commitment"]),
+                        "shelf_life_hours": float(row["shelf_life_hours"]),
+                        "salvage_value_per_unit": float(row["salvage_value_per_unit"]),
+                        "daily_capacity_minutes": float(row["daily_capacity_minutes"]),
+                        "working_capital_limit": float(row["working_capital_limit"]),
+                        "commitment_deadline": deadline,
+                    },
+                )
+
+        # 3. Seed HourlyObservations
+        HourlyObservation.objects.all().delete()
+        batch = []
+        for row in obs_df.itertuples():
+            if row.sku_id not in sku_objs:
+                continue
+            sku = sku_objs[row.sku_id]
+            ts = row.timestamp
+            if timezone.is_naive(ts):
+                ts = timezone.make_aware(ts)
+
+            pv = None if pd.isna(row.product_views) else int(row.product_views)
+            ao = None if pd.isna(row.affiliate_orders) else int(row.affiliate_orders)
+            aa = None if pd.isna(row.active_affiliates) else int(row.active_affiliates)
+            cvv = (
+                None
+                if pd.isna(row.content_view_velocity)
+                else float(row.content_view_velocity)
+            )
+
+            batch.append(
+                HourlyObservation(
+                    sku=sku,
+                    timestamp=ts,
+                    orders_created=int(row.orders_created),
+                    orders_cancelled_pre_ship=int(row.orders_cancelled_pre_ship),
+                    orders_shipped=int(row.orders_shipped),
+                    orders_delivered=int(row.orders_delivered),
+                    orders_returned=int(row.orders_returned),
+                    stock_on_hand=int(row.stock_on_hand),
+                    incoming_stock=int(row.incoming_stock),
+                    stockout_flag=bool(row.stockout_flag),
+                    price=float(row.price),
+                    promotion_flag=bool(row.promotion_flag),
+                    product_views=pv,
+                    affiliate_orders=ao,
+                    active_affiliates=aa,
+                    content_view_velocity=cvv,
+                )
+            )
+            if len(batch) >= 2000:
+                HourlyObservation.objects.bulk_create(batch)
+                batch = []
+
+        if batch:
+            HourlyObservation.objects.bulk_create(batch)
+
+        for s_id, s_obj in sku_objs.items():
+            self.stdout.write(f"Seeded {s_id} ({s_obj.name} - {s_obj.demo_scenario}) from simulator.")
 
     def _generate_history(self, sku, scenario, now, rng):
         HourlyObservation.objects.filter(sku=sku).delete()

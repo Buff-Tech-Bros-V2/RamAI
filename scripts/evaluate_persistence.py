@@ -24,6 +24,7 @@ from sklearn.metrics import brier_score_loss, roc_auc_score
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from apps.forecasting.evaluation import baseline_hourly_series  # noqa: E402
 from apps.forecasting.features import (  # noqa: E402
     MODE_CONTENT, MODE_TRANSACTION, build_training_frame, load_observations,
 )
@@ -34,23 +35,6 @@ PARAMS = {
     "bagging_fraction": 0.85, "bagging_freq": 1, "lambda_l2": 1.0,
     "verbosity": -1, "seed": 42,
 }
-
-
-def baseline_hourly_series(obs: pd.DataFrame, lookback_hours: int = 24 * 14) -> pd.DataFrame:
-    """Trailing MEAN hourly demand per SKU -- the 'normal' a surge exceeds.
-
-    Mean, not median: the label compares the future window's mean hourly rate
-    against this, and a median over a spiky day/night series sits far below its
-    mean, which would mark almost every window as a surge.
-    """
-    df = obs.sort_values(["sku_id", "timestamp"]).reset_index(drop=True).copy()
-    df["fulfillment_demand"] = (
-        df["orders_created"] - df["orders_cancelled_pre_ship"]
-    ).astype(float)
-    df["baseline_hourly"] = df.groupby("sku_id", sort=False)["fulfillment_demand"].transform(
-        lambda x: x.rolling(lookback_hours, min_periods=24).mean()
-    )
-    return df[["timestamp", "sku_id", "baseline_hourly"]]
 
 
 def main() -> None:
