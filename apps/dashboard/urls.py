@@ -18,4 +18,9 @@ urlpatterns = [
     path("api/chart-data/", api_views.chart_data, name="chart_data"),
     path("partials/dashboard/", api_views.dashboard_partial, name="dashboard_partial"),
     path("api/whatif/", api_views.whatif_recalculate, name="whatif_recalculate"),
+    path(
+        "decisions/<str:sku_id>/explanation/",
+        api_views.explanation_partial,
+        name="explanation",
+    ),
 ]

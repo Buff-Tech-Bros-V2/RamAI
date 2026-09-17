@@ -1,0 +1,36 @@
+<aside class="ai-explanation animate-in" id="ai-explanation">
+    <div class="ai-heading">
+        <span class="ai-mark">AI</span>
+        <div><span>Penjelasan RamAI</span><strong>Kenapa rekomendasi ini?</strong></div>
+    </div>
+    {% if explanation_text %}
+    <div class="ai-copy">{{ explanation_text }}</div>
+    <div class="ai-trust-note">Angka berasal dari forecast dan mesin keputusan RamAI. AI hanya membantu menjelaskan hasilnya.</div>
+    {% else %}
+    <div class="ai-idle">
+        {% if explanation_error %}
+        <div class="ai-error" role="alert">{{ explanation_error }}</div>
+        {% endif %}
+        <form class="ai-analyze-form"
+              hx-post="{% url 'dashboard:explanation' sku.sku_id %}"
+              hx-target="#ai-explanation"
+              hx-swap="outerHTML"
+              hx-indicator="#ai-loading, .ai-analyze-form">
+            {% csrf_token %}
+            {# The explanation must describe the same scenario shown on screen,
+               so the active what-if values ride along with the request. #}
+            <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|default_if_none:'' }}">
+            <input type="hidden" name="capital" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit }}">
+            <input type="hidden" name="window_hours" value="{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }}">
+            <p class="ai-idle-copy">Angka rekomendasi di samping sudah siap. Jalankan analisis untuk meminta RamAI menjelaskan alasannya.</p>
+            <button type="submit" class="ram-btn ram-btn-primary">
+                {% if explanation_error %}Coba analisis lagi{% else %}Analisis{% endif %}
+            </button>
+        </form>
+        <div class="ai-loading htmx-indicator" id="ai-loading" aria-live="polite">
+            <div class="ai-loading-head"><div class="loading-spinner"></div><span>RamAI sedang menyusun penjelasan…</span></div>
+            <div class="ai-skeleton"><span></span><span></span><span></span><span></span></div>
+        </div>
+    </div>
+    {% endif %}
+</aside>

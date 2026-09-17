@@ -12,12 +12,16 @@ Agent().run() which orchestrates forecast → decision → explanation.
 """
 
 import json
+import logging
 
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.views.decorators.http import require_POST
 
 from apps.agent.orchestrator import Agent
 from apps.skus.models import SKU
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_overrides(request) -> dict:
@@ -133,6 +137,38 @@ def whatif_recalculate(request):
         "chart_data_json": _build_chart_json(recent_history, result),
     }
     return render(request, "dashboard/_partials/dashboard_content.html", context)
+
+
+@require_POST
+def explanation_partial(request, sku_id):
+    """HTMX endpoint: run the LLM explanation for one SKU and swap it in.
+
+    This is the only view that asks `Agent.run` to explain, so a provider
+    call happens when the user presses "Analisis" -- not on every page load.
+    POST-only so a browser prefetch or a refresh cannot spend the quota.
+    """
+    sku = get_object_or_404(SKU, pk=sku_id)
+    overrides = _parse_overrides(request)
+
+    context = {
+        "sku": sku,
+        "decision_config": sku.decision_config,
+        "whatif": overrides,
+    }
+    try:
+        result = Agent().run(sku, overrides=overrides, explain=True)
+    except Exception:
+        # The explainer already falls back to its offline template on a failed
+        # provider call, so reaching here means the pipeline itself broke.
+        # Keep the panel usable: show the reason and let the user retry.
+        logger.exception("Explanation failed for %s", sku_id)
+        context["explanation_error"] = (
+            "Penjelasan gagal dibuat. Angka rekomendasi tetap valid — coba lagi sebentar."
+        )
+    else:
+        context["explanation_text"] = result["explanation_text"]
+
+    return render(request, "dashboard/_partials/ai_explanation.html", context)
 
 
 def _build_chart_json(recent_history, result) -> str:

@@ -50,7 +50,22 @@ class Agent:
             )
         return warnings
 
-    def run(self, sku: SKU, now=None, overrides: dict | None = None) -> dict:
+    def run(
+        self,
+        sku: SKU,
+        now=None,
+        overrides: dict | None = None,
+        explain: bool = False,
+    ) -> dict:
+        """Run the pipeline. `explain=True` is the only path that calls the LLM.
+
+        The explanation is opt-in because it is the one expensive, rate-limited
+        step here: rendering a page (or five, once per SKU on the overview)
+        used to burn a provider call each time even though nobody had asked
+        for the narrative yet. Callers that only need the numbers leave it off
+        and the dashboard requests the text separately when the user clicks
+        "Analisis".
+        """
         latest_obs = sku.observations.order_by("-timestamp").first()
         if now is None and latest_obs is not None:
             now = latest_obs.timestamp
@@ -80,7 +95,7 @@ class Agent:
             decision=decision,
             warnings=warnings,
         )
-        explanation_text = self.explainer.explain(packet)
+        explanation_text = self.explainer.explain(packet) if explain else None
 
         return {
             "now": now,
@@ -91,5 +106,5 @@ class Agent:
             "decision": decision,
             "packet": packet,
             "explanation_text": explanation_text,
-            "is_llm": getattr(self.explainer, "is_llm", False),
+            "is_llm": explain and getattr(self.explainer, "is_llm", False),
         }

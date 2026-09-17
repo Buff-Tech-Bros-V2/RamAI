@@ -80,14 +80,7 @@
             <span>Evaluasi ulang {{ rec.reevaluate_at|date:"d M, H:i" }}</span>
         </div>
     </article>
-    <aside class="ai-explanation animate-in">
-        <div class="ai-heading">
-            <span class="ai-mark">AI</span>
-            <div><span>Penjelasan RamAI</span><strong>Kenapa rekomendasi ini?</strong></div>
-        </div>
-        <div class="ai-copy">{{ result.explanation_text }}</div>
-        <div class="ai-trust-note">Angka berasal dari forecast dan decision engine. AI hanya membantu menjelaskan hasilnya.</div>
-    </aside>
+    {% include "dashboard/_partials/ai_explanation.html" with explanation_text=result.explanation_text %}
 </section>
 
 <section class="key-metrics" aria-label="Ringkasan kondisi">
