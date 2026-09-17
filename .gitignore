@@ -5,3 +5,5 @@ db.sqlite3
 .env
 *.log
 .opencode/
+artifacts/
+.coverage
