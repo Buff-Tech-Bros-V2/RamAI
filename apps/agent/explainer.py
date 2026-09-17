@@ -2,9 +2,12 @@
 Explanation layer (PRD section 8.4 / `explain_recommendation` tool).
 
 Provides AI-driven operational decision explanation for merchants:
-1. `GeminiLLMExplainer`: uses Google Gemini (flash-tier) to synthesize human-readable,
-   executive-level Indonesian summaries from the `ExplanationPacket`.
-2. `DummyLLMExplainer`: deterministic template fallback that works offline or when
+1. `GroqLLMExplainer`: default cloud provider. Groq's free developer tier serves
+   open-weight models (gpt-oss-120b and friends) over an OpenAI-compatible API
+   with far more generous free quotas than Gemini's flash tier.
+2. `GeminiLLMExplainer`: alternative provider (Google Gemini flash-tier), kept for
+   deployments that already hold a Gemini key.
+3. `DummyLLMExplainer`: deterministic template fallback that works offline or when
    no API key is provided.
 
 Adheres strictly to PRD Section 8.4 (FR-A02/FR-A07):
@@ -103,22 +106,39 @@ class DummyLLMExplainer(LLMExplainer):
         )
 
 
-class GeminiLLMExplainer(LLMExplainer):
-    """Real LLM explanation powered by Google Gemini (flash-tier).
+class _HTTPLLMExplainer(LLMExplainer):
+    """Shared prompt construction, retry loop and graceful fallback.
 
-    Uses zero-dependency standard library urllib for maximum reliability.
-    Falls back gracefully to DummyLLMExplainer on any network error or quota exhaustion.
+    Subclasses only implement `_call_once`, i.e. the provider-specific HTTP call.
     """
 
     is_llm: bool = True
 
-    def __init__(self, api_key: str, model_name: str = "gemini-3.6-flash", timeout_sec: int = 15,
+    # HTTP statuses worth a short retry: rate limiting and transient overload.
+    _RETRYABLE_STATUSES = {429, 500, 502, 503}
+
+    def __init__(self, api_key: str, model_name: str, timeout_sec: int = 15,
                  max_retries: int = 2):
         self.api_key = api_key
         self.model_name = model_name
         self.timeout_sec = timeout_sec
         self.max_retries = max_retries
         self.fallback = DummyLLMExplainer()
+
+    @abstractmethod
+    def _call_once(self, prompt: str) -> str | None:
+        """Single request attempt. Returns text, or None if no usable text came back."""
+
+    def _post_json(self, url: str, payload: dict, headers: dict) -> dict | None:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", **headers},
+        )
+        with urllib.request.urlopen(req, timeout=self.timeout_sec) as response:
+            if response.status != 200:
+                return None
+            return json.loads(response.read().decode("utf-8"))
 
     def _build_prompt(self, packet: ExplanationPacket) -> str:
         rec = packet.decision.recommended
@@ -172,60 +192,15 @@ ATURAN KETAT PENULISAN (COMPLIANCE):
    - Poin penting waktu evaluasi ulang berikutnya sebelum batas deadline.
 """
 
-    # HTTP statuses worth a short retry: rate limiting and transient overload.
-    _RETRYABLE_STATUSES = {429, 503}
-
-    def _call_gemini_once(self, prompt: str) -> str | None:
-        """Single request attempt. Returns text, or None if no usable text came back."""
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
-            f"?key={self.api_key}"
-        )
-        payload = {
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": prompt}],
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.2,
-                "maxOutputTokens": 1500,
-                # Flash-tier "thinking" models otherwise spend part of the
-                # output budget on hidden reasoning tokens before writing
-                # the visible answer, which truncates short responses.
-                "thinkingConfig": {"thinkingBudget": 0},
-            },
-        }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req, timeout=self.timeout_sec) as response:
-            if response.status != 200:
-                return None
-            data = json.loads(response.read().decode("utf-8"))
-            candidates = data.get("candidates", [])
-            if not candidates:
-                return None
-            parts = candidates[0].get("content", {}).get("parts", [])
-            text = "".join(p.get("text", "") for p in parts).strip()
-            if not text:
-                logger.warning(
-                    "Gemini returned no text (finishReason=%s).",
-                    candidates[0].get("finishReason"),
-                )
-            return text or None
-
     def explain(self, packet: ExplanationPacket) -> str:
         prompt = self._build_prompt(packet)
+        provider = type(self).__name__
 
         attempt = 0
         while attempt <= self.max_retries:
             attempt += 1
             try:
-                text = self._call_gemini_once(prompt)
+                text = self._call_once(prompt)
                 if text:
                     return text
                 break  # 200 OK but no usable text -- retrying won't help
@@ -237,40 +212,146 @@ ATURAN KETAT PENULISAN (COMPLIANCE):
                     pass
                 if e.code in self._RETRYABLE_STATUSES and attempt <= self.max_retries:
                     logger.warning(
-                        "Gemini API transient error (HTTP %s), retrying (%d/%d). Body: %s",
-                        e.code, attempt, self.max_retries, body,
+                        "%s transient error (HTTP %s), retrying (%d/%d). Body: %s",
+                        provider, e.code, attempt, self.max_retries, body,
                     )
                     time.sleep(0.5 * attempt)
                     continue
                 logger.warning(
-                    "Gemini API call failed (HTTP %s), falling back to template. Body: %s",
-                    e.code, body,
+                    "%s call failed (HTTP %s), falling back to template. Body: %s",
+                    provider, e.code, body,
                 )
                 break
             except (urllib.error.URLError, TimeoutError) as e:
                 if attempt <= self.max_retries:
                     logger.warning(
-                        "Gemini API network error (%s), retrying (%d/%d).",
-                        e, attempt, self.max_retries,
+                        "%s network error (%s), retrying (%d/%d).",
+                        provider, e, attempt, self.max_retries,
                     )
                     time.sleep(0.5 * attempt)
                     continue
-                logger.warning("Gemini API call failed (%s: %s), falling back to template.",
-                              type(e).__name__, e)
+                logger.warning("%s call failed (%s: %s), falling back to template.",
+                               provider, type(e).__name__, e)
                 break
             except Exception as e:
                 # Any unexpected error: gracefully fall back, no retry.
-                logger.warning("Gemini API call failed (%s: %s), falling back to template.",
-                              type(e).__name__, e)
+                logger.warning("%s call failed (%s: %s), falling back to template.",
+                               provider, type(e).__name__, e)
                 break
 
         return self.fallback.explain(packet)
 
 
+class GroqLLMExplainer(_HTTPLLMExplainer):
+    """Groq-hosted open-weight model via the OpenAI-compatible chat endpoint.
+
+    Default model is `openai/gpt-oss-120b`: on Groq's free tier that allows
+    30 req/min, 1,000 req/day and 200k tokens/day -- comfortably more headroom
+    than Gemini's flash free tier for a per-SKU explanation workload.
+    Set GROQ_MODEL to switch (e.g. `llama-3.1-8b-instant` for 14.4k req/day).
+    """
+
+    ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
+
+    def __init__(self, api_key: str, model_name: str = "openai/gpt-oss-120b",
+                 timeout_sec: int = 20, max_retries: int = 2):
+        super().__init__(api_key, model_name, timeout_sec, max_retries)
+
+    def _call_once(self, prompt: str) -> str | None:
+        payload = {
+            "model": self.model_name,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.2,
+            "max_completion_tokens": 1500,
+            # gpt-oss models expose a reasoning budget; keep it minimal so the
+            # whole completion budget goes to the visible answer.
+            "reasoning_effort": "low",
+        }
+        data = self._post_json(
+            self.ENDPOINT, payload, {"Authorization": f"Bearer {self.api_key}"}
+        )
+        if not data:
+            return None
+        choices = data.get("choices", [])
+        if not choices:
+            return None
+        text = (choices[0].get("message", {}).get("content") or "").strip()
+        if not text:
+            logger.warning(
+                "Groq returned no text (finish_reason=%s).",
+                choices[0].get("finish_reason"),
+            )
+        return text or None
+
+
+class GeminiLLMExplainer(_HTTPLLMExplainer):
+    """Alternative provider: Google Gemini (flash-tier)."""
+
+    def __init__(self, api_key: str, model_name: str = "gemini-3.6-flash",
+                 timeout_sec: int = 15, max_retries: int = 2):
+        super().__init__(api_key, model_name, timeout_sec, max_retries)
+
+    def _call_once(self, prompt: str) -> str | None:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
+            f"?key={self.api_key}"
+        )
+        payload = {
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 1500,
+                # Flash-tier "thinking" models otherwise spend part of the
+                # output budget on hidden reasoning tokens before writing
+                # the visible answer, which truncates short responses.
+                "thinkingConfig": {"thinkingBudget": 0},
+            },
+        }
+        data = self._post_json(url, payload, {})
+        if not data:
+            return None
+        candidates = data.get("candidates", [])
+        if not candidates:
+            return None
+        parts = candidates[0].get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts).strip()
+        if not text:
+            logger.warning(
+                "Gemini returned no text (finishReason=%s).",
+                candidates[0].get("finishReason"),
+            )
+        return text or None
+
+
 def get_explainer() -> LLMExplainer:
-    """Factory: returns Gemini explainer if GEMINI_API_KEY is configured, else fallback."""
+    """Factory: pick a provider from the environment, else the offline template.
+
+    `LLM_PROVIDER` (groq | gemini | dummy) forces a choice. Without it, Groq wins
+    when `GROQ_API_KEY` is set, then Gemini via `GEMINI_API_KEY`.
+    """
     _load_env_file()
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if api_key:
-        return GeminiLLMExplainer(api_key=api_key)
+    provider = os.environ.get("LLM_PROVIDER", "").strip().lower()
+    groq_key = os.environ.get("GROQ_API_KEY")
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+
+    if provider == "dummy":
+        return DummyLLMExplainer()
+
+    if provider == "gemini" or (not provider and not groq_key and gemini_key):
+        if gemini_key:
+            return GeminiLLMExplainer(
+                api_key=gemini_key,
+                model_name=os.environ.get("GEMINI_MODEL", "gemini-3.6-flash"),
+            )
+        logger.warning("LLM_PROVIDER=gemini but GEMINI_API_KEY is unset; using template fallback.")
+        return DummyLLMExplainer()
+
+    if groq_key:
+        return GroqLLMExplainer(
+            api_key=groq_key,
+            model_name=os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b"),
+        )
+
+    if provider == "groq":
+        logger.warning("LLM_PROVIDER=groq but GROQ_API_KEY is unset; using template fallback.")
     return DummyLLMExplainer()

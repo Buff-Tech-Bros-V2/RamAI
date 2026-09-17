@@ -25,13 +25,18 @@ Each concern is a separate Django app so pieces can be developed and swapped ind
 | `apps/skus` | SKU, decision constraints, hourly historical data models + `seed_dummy_data` command | Real (dummy data) |
 | `apps/forecasting` | `ForecastProvider` interface + `DummyForecastProvider` | **Placeholder** |
 | `apps/decisionengine` | Turns a forecast into 3 candidate actions (commit now / staged / wait), scored with the contribution formula from PRD section 11 | Real logic |
-| `apps/agent` | Orchestrates validate → forecast → decide → explain; `LLMExplainer` interface + `DummyLLMExplainer` | Orchestration real, explainer is **placeholder** |
+| `apps/agent` | Orchestrates validate → forecast → decide → explain; `LLMExplainer` interface + Groq / Gemini / template explainers | Real |
 | `apps/dashboard` | Views + templates (SKU selector, forecast table, decision cards, what-if form, approval) | Real, minimal UI |
 
 ## Where to plug in the real components
 
 - **Regression/forecast model**: implement a new `ForecastProvider` in `apps/forecasting/services.py` (see `DummyForecastProvider` for the exact input/output contract: `ForecastOutput` in `apps/forecasting/dataclasses.py`), then swap it in `get_forecast_provider()`. Nothing else needs to change — `apps.decisionengine` and `apps.agent` only depend on `ForecastOutput`.
-- **LLM explanation**: implement a new `LLMExplainer` in `apps/agent/explainer.py` (contract: takes an `ExplanationPacket`, returns a string — must not invent numbers, only narrate what's already in the packet), then swap it in `get_explainer()`.
+- **LLM explanation**: `apps/agent/explainer.py` ships three `LLMExplainer` implementations, selected by `get_explainer()` from the environment:
+  - `GroqLLMExplainer` (default) — Groq's free developer tier over the OpenAI-compatible endpoint. Default model `openai/gpt-oss-120b`: 30 req/min, 1,000 req/day, 200k tokens/day, no credit card. Get a key at <https://console.groq.com/keys>. Set `GROQ_MODEL=llama-3.1-8b-instant` if you need 14,400 req/day instead.
+  - `GeminiLLMExplainer` — Google Gemini flash-tier, kept as an alternative.
+  - `DummyLLMExplainer` — deterministic offline template, used whenever no key is set or a call fails.
+
+  Select with `LLM_PROVIDER=groq|gemini|dummy` in `.env` (blank auto-picks Groq when `GROQ_API_KEY` is set, else Gemini). To add another provider, subclass `_HTTPLLMExplainer` and implement `_call_once` — the prompt, retry loop and template fallback are shared. The contract is unchanged: take an `ExplanationPacket`, return a string, never invent numbers.
 
 ## Known MVP simplifications (see PRD for full spec)
 
