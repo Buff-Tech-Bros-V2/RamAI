@@ -24,11 +24,13 @@ from .dataclasses import ForecastOutput
 
 DEFAULT_HORIZONS_HOURS = (24, 48, 72)
 
-# Which trained bundle the app serves. Transaction-only is the default because
-# the content features did not show a reliable gain on the demo data -- see
-# data/README.md "What the models found on this data". Switch to
-# features.MODE_CONTENT to serve the enriched model instead.
-FORECAST_FEATURE_MODE = "transaction"
+# Which trained bundle the app serves. The content model wins on both questions
+# across 8 dataset seeds -- WAPE -7% at every horizon, surge persistence AUC
+# 0.72 -> 0.82 at 24h (see data/README.md). Transaction-only stays trained and
+# evaluated as the FR-D06 fallback: when the content columns are missing the
+# provider raises `content_signal_missing` rather than silently guessing.
+# Switch back to "transaction" to serve the transaction-only bundle.
+FORECAST_FEATURE_MODE = "transaction_content"
 
 
 class ForecastProvider(ABC):
