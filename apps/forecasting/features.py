@@ -125,7 +125,11 @@ def feature_columns(feature_mode: str = MODE_CONTENT) -> list[str]:
     cols += [
         "hour", "dow", "hour_sin", "hour_cos", "dow_sin", "dow_cos", "is_weekend",
         "price", "price_vs_trailing_mean", "promotion_flag",
-        "stock_on_hand", "stock_cover_hours", "stockout_flag", "stockout_share_24",
+        # stock_on_hand / stock_cover_hours are deliberately NOT features: they
+        # proxy the replenishment rule rather than demand, dominated gain at 30%,
+        # and removing them improved WAPE for both modes (0.253 -> 0.232 at 48h).
+        # stockout_flag stays -- it tells the model the history was truncated.
+        "stockout_flag", "stockout_share_24",
         "sku_id_code", "product_category_code",
     ]
 
