@@ -24,6 +24,12 @@ from .dataclasses import ForecastOutput
 
 DEFAULT_HORIZONS_HOURS = (24, 48, 72)
 
+# Which trained bundle the app serves. Transaction-only is the default because
+# the content features did not show a reliable gain on the demo data -- see
+# data/README.md "What the models found on this data". Switch to
+# features.MODE_CONTENT to serve the enriched model instead.
+FORECAST_FEATURE_MODE = "transaction"
+
 
 class ForecastProvider(ABC):
     @abstractmethod
@@ -107,5 +113,16 @@ class DummyForecastProvider(ForecastProvider):
 
 
 def get_forecast_provider() -> ForecastProvider:
-    """Factory so callers don't import the concrete placeholder directly."""
+    """Factory so callers don't import a concrete provider directly.
+
+    Returns the trained LightGBM provider when artifacts exist on disk, and
+    falls back to the heuristic placeholder when they do not -- so the app
+    still runs on a fresh checkout before anyone has trained a model.
+
+    Train the artifacts with:  python scripts/train_forecast.py
+    """
+    from .provider import LightGBMForecastProvider, artifacts_available
+
+    if artifacts_available(feature_mode=FORECAST_FEATURE_MODE):
+        return LightGBMForecastProvider(feature_mode=FORECAST_FEATURE_MODE)
     return DummyForecastProvider()

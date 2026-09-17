@@ -148,14 +148,16 @@ def persistence_curve(scenarios: ScenarioSet, baseline_hourly: float,
 
 def baseline_hourly_level(obs: pd.DataFrame, sku_id: str, cutoff,
                           lookback_days: int = 14) -> float:
-    """Pre-surge normal hourly demand: the median hour over recent history.
+    """Pre-surge normal hourly demand: the MEAN hour over recent history.
 
-    Median rather than mean so an in-progress surge does not inflate the very
-    baseline it is being compared against.
+    Mean, not median. Scenarios are compared against this as a mean hourly
+    rate, and on a spiky day/night series the median sits far below the mean --
+    using it made every scenario count as persisting and pinned the
+    probability at 1.0.
     """
     history = obs[(obs["sku_id"] == sku_id) & (obs["timestamp"] <= cutoff)]
     history = history.sort_values("timestamp").tail(24 * lookback_days)
     if history.empty:
         return float("nan")
     demand = (history["orders_created"] - history["orders_cancelled_pre_ship"]).astype(float)
-    return float(demand.median())
+    return float(demand.mean())
