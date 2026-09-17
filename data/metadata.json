@@ -1,0 +1,31 @@
+{
+  "dataset_version": "synthetic-v1",
+  "generated_at": "2026-09-17T16:31:59.614971+07:00",
+  "seed": 42,
+  "days": 90,
+  "timezone": "Asia/Jakarta (+07:00)",
+  "now_cutoff": "2026-09-17T13:00:00+07:00",
+  "n_skus": 5,
+  "n_rows": 10800,
+  "horizons": [
+    24,
+    48,
+    72
+  ],
+  "synthetic": true,
+  "notice": "Synthetic Demo Data - latent_truth.csv is evaluator-only and must never be used as a feature.",
+  "episode_counts": {
+    "TRUE_SURGE": 9,
+    "MISSING_SIGNAL": 7,
+    "SLOW_BURN": 7,
+    "FADING_SURGE": 6,
+    "FALSE_CONTENT": 6
+  },
+  "stockout_share": 0.06388888888888888,
+  "content_missing_share": 0.15194444444444444,
+  "rows_per_split": {
+    "train": 7560,
+    "val": 1620,
+    "test": 1620
+  }
+}

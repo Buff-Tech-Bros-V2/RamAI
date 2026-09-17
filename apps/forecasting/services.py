@@ -24,6 +24,14 @@ from .dataclasses import ForecastOutput
 
 DEFAULT_HORIZONS_HOURS = (24, 48, 72)
 
+# Which trained bundle the app serves. The content model wins on both questions
+# across 8 dataset seeds -- WAPE -7% at every horizon, surge persistence AUC
+# 0.72 -> 0.82 at 24h (see data/README.md). Transaction-only stays trained and
+# evaluated as the FR-D06 fallback: when the content columns are missing the
+# provider raises `content_signal_missing` rather than silently guessing.
+# Switch back to "transaction" to serve the transaction-only bundle.
+FORECAST_FEATURE_MODE = "transaction_content"
+
 
 class ForecastProvider(ABC):
     @abstractmethod
@@ -107,5 +115,16 @@ class DummyForecastProvider(ForecastProvider):
 
 
 def get_forecast_provider() -> ForecastProvider:
-    """Factory so callers don't import the concrete placeholder directly."""
+    """Factory so callers don't import a concrete provider directly.
+
+    Returns the trained LightGBM provider when artifacts exist on disk, and
+    falls back to the heuristic placeholder when they do not -- so the app
+    still runs on a fresh checkout before anyone has trained a model.
+
+    Train the artifacts with:  python scripts/train_forecast.py
+    """
+    from .provider import LightGBMForecastProvider, artifacts_available
+
+    if artifacts_available(feature_mode=FORECAST_FEATURE_MODE):
+        return LightGBMForecastProvider(feature_mode=FORECAST_FEATURE_MODE)
     return DummyForecastProvider()

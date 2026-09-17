@@ -79,7 +79,7 @@
   }
 
   function initForecastChart() {
-    var raw = getJsonData('forecast-chart-data');
+    var raw = getJsonData('forecast-chart-data') || getJsonData('demand-chart-data');
     if (!raw) return;
     var data = raw.forecast || raw;
     var ctx = document.getElementById('forecastChart');

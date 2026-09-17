@@ -15,11 +15,21 @@
     <!-- Design System -->
     <link rel="stylesheet" href="{% static 'dashboard/css/ramai.css' %}">
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <!-- Chart.js (local with CDN fallback) -->
+    <script src="{% static 'dashboard/js/chart.umd.min.js' %}"></script>
+    <script>
+        if (typeof Chart === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" crossorigin="anonymous"><\/script>');
+        }
+    </script>
 
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"></script>
+    <!-- HTMX (local with CDN fallback) -->
+    <script src="{% static 'dashboard/js/htmx.min.js' %}"></script>
+    <script>
+        if (typeof htmx === 'undefined') {
+            document.write('<script src="https://unpkg.com/htmx.org@2.0.4" integrity="sha384-HGfztofotfshcF7+8n44JQL2oJmowVChPTg48S+jvZoztPfvwD79OC/LTtG6dMp+" crossorigin="anonymous"><\/script>');
+        }
+    </script>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 

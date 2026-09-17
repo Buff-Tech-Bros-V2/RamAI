@@ -1,0 +1,6 @@
+operation_mode,constraint_profile,sku_id,unit_selling_price,unit_variable_cost,production_minutes_per_unit,material_per_unit,supplier_lead_time_hours,minimum_commitment,shelf_life_hours,salvage_value_per_unit,shop_id,daily_capacity_minutes,raw_material_stock,packaging_stock,working_capital_limit,commitment_deadline
+PRODUCTION,FOOD_DEMO,SKU-001,38000,17500,1.6,1.0,,20,2880,9000,SHOP-DEMO-01,480,900,1200,6500000,2026-09-17T16:00:00+07:00
+PRODUCTION,FOOD_DEMO,SKU-002,24000,11000,1.1,0.8,,25,2160,5500,SHOP-DEMO-01,480,900,1200,6500000,2026-09-17T16:00:00+07:00
+PRODUCTION,FOOD_DEMO,SKU-003,19000,9500,0.7,1.2,,40,720,3000,SHOP-DEMO-01,480,900,1200,6500000,2026-09-17T16:00:00+07:00
+PRODUCTION,FOOD_DEMO,SKU-004,52000,26000,2.4,1.5,,15,4320,14000,SHOP-DEMO-01,480,900,1200,6500000,2026-09-17T16:00:00+07:00
+PRODUCTION,FOOD_DEMO,SKU-005,31000,14000,1.3,1.0,,20,3600,7500,SHOP-DEMO-01,480,900,1200,6500000,2026-09-17T16:00:00+07:00

@@ -170,8 +170,8 @@
 
 <div style="font-size: 11px; color: var(--ram-muted-500); margin-top: -24px; margin-bottom: var(--space-8);">
     "Wajar" dipakai sebagai perkiraan utama; "pesimis" dan "optimis" nunjukin rentang
-    kalau tebakannya meleset. Model: {{ result.forecast_48h.model_name }}
-    ({{ result.forecast_48h.model_version }}) — <em>placeholder, belum model regresi asli.</em>
+    kalau tebakannya meleset. Model: <strong>{{ result.forecast_48h.model_name }}</strong>
+    ({{ result.forecast_48h.model_version }}){% if "dummy" in result.forecast_48h.model_name %} — <em>placeholder, belum model regresi asli.</em>{% endif %}
 </div>
 
 <!-- ===== Action Cards ===== -->
@@ -197,7 +197,11 @@
         </div>
         <div class="explanation-text">{{ result.explanation_text }}</div>
         <div class="explanation-note">
-            Placeholder: mengisi template dari angka di atas, belum LLM asli.
+            {% if result.is_llm %}
+            Didukung oleh Google Gemini (schema-validated AI explainer).
+            {% else %}
+            Mengisi template terstruktur dari angka di atas (fallback deterministik).
+            {% endif %}
         </div>
     </div>
 
