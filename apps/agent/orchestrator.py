@@ -51,7 +51,11 @@ class Agent:
         return warnings
 
     def run(self, sku: SKU, now=None, overrides: dict | None = None) -> dict:
-        now = now or timezone.now()
+        latest_obs = sku.observations.order_by("-timestamp").first()
+        if now is None and latest_obs is not None:
+            now = latest_obs.timestamp
+        else:
+            now = now or timezone.now()
         decision_config = sku.decision_config
         warnings = self.validate_data(sku, now)
 
