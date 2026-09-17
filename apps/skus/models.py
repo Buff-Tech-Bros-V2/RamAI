@@ -1,5 +1,5 @@
 """
-Data layer for VIRALCAST (PRD section 9.1 & 9.2).
+Data layer for RamAI (PRD section 9.1 & 9.2).
 
 These models hold SKU master data, per-SKU decision configuration
 (constraints used by the decision engine), and hourly historical

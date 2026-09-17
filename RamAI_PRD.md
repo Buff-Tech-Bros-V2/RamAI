@@ -1,4 +1,4 @@
-# Product Requirements Document VIRALCAST
+# Product Requirements Document RamAI
 
 **Versi:** 1.0  
 **Status:** Ready for MVP implementation  
@@ -8,7 +8,7 @@
 
 ## 1. Ringkasan produk
 
-VIRALCAST adalah asisten keputusan produksi dan replenishment untuk manufaktur serta retailer yang mengalami lonjakan permintaan dari social commerce. Sistem memperkirakan distribusi demand per SKU, menilai apakah lonjakan masih berlangsung ketika stok tambahan tersedia, kemudian membandingkan pilihan berkomitmen sekarang, bertahap, atau menunggu sampai commitment deadline.
+RamAI adalah asisten keputusan produksi dan replenishment untuk manufaktur serta retailer yang mengalami lonjakan permintaan dari social commerce. Sistem memperkirakan distribusi demand per SKU, menilai apakah lonjakan masih berlangsung ketika stok tambahan tersedia, kemudian membandingkan pilihan berkomitmen sekarang, bertahap, atau menunggu sampai commitment deadline.
 
 Regression model dan decision engine menghasilkan angka. Agent mengatur alur analisis, memeriksa kelengkapan data, menjalankan tool, dan meminta persetujuan pengguna. LLM hanya menjelaskan insight, trade-off, asumsi, dan rekomendasi dari output yang terstruktur. MVP menggunakan data sintetis yang dapat direproduksi dan tidak melakukan transaksi otomatis.
 
@@ -30,7 +30,7 @@ Jika manufaktur atau retailer memperoleh forecast probabilistik yang mempertimba
 
 Pembeda yang akan dibuktikan:
 
-> VIRALCAST menghitung nilai menunggu informasi tambahan sebelum commitment deadline, lalu memilih jumlah produksi atau replenishment di bawah batas modal, kapasitas, dan lead time.
+> RamAI menghitung nilai menunggu informasi tambahan sebelum commitment deadline, lalu memilih jumlah produksi atau replenishment di bawah batas modal, kapasitas, dan lead time.
 
 ## 4. Goals
 
@@ -76,7 +76,7 @@ Makanan kemasan dipilih sebagai beachhead use case untuk demonstrasi, bukan seba
 
 ### 6.1 Dua dimensi lonjakan
 
-VIRALCAST tidak menggunakan satu classifier dengan kelas ramai sesaat, ramai beneran, dan ramai palsu. Sistem memisahkan:
+RamAI tidak menggunakan satu classifier dengan kelas ramai sesaat, ramai beneran, dan ramai palsu. Sistem memisahkan:
 
 1. **Surge persistence:** peluang demand tetap berada di atas baseline pada 24 dan 48 jam berikutnya.
 2. **Transaction risk:** peluang order batal sebelum dikirim, gagal kirim, atau retur.
@@ -414,9 +414,8 @@ flowchart TD
 
 - Python, Pandas, LightGBM atau XGBoost;
 - OR-Tools, PuLP, atau enumerasi kandidat;
-- FastAPI untuk tool endpoints jika diperlukan;
-- Streamlit untuk MVP tercepat;
-- SQLite atau Parquet untuk data demo;
+- Django untuk dashboard, tool orchestration, dan admin data demo;
+- SQLite untuk data demo;
 - LLM untuk explanation layer dengan schema-validated input.
 
 ## 15. UX requirements
@@ -485,7 +484,7 @@ Asumsi utama:
 | --- | --- | --- |
 | Baseline A | Seasonal naive | Fixed reorder rule |
 | Baseline B | Transaction model | Decision engine |
-| VIRALCAST | Transaction plus content | Decision engine |
+| RamAI | Transaction plus content | Decision engine |
 
 Semua policy menggunakan latent demand, initial stock, biaya, modal, dan kapasitas yang sama.
 
@@ -544,7 +543,7 @@ Juri mengubah operation mode, lead time, commitment deadline, atau kapasitas. Si
 | Jam 3-7 | Baseline serta transaction and content models |
 | Jam 7-11 | Quantile forecast, scenarios, dan forecast evaluation |
 | Jam 11-15 | Decision engine dan constraints |
-| Jam 15-19 | Streamlit dashboard end-to-end |
+| Jam 15-19 | Django dashboard end-to-end |
 | Jam 19-21 | Agent orchestration dan fallback states |
 | Jam 21-24 | Testing, baseline comparison, rehearsal, dan backup video |
 

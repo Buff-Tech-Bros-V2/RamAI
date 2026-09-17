@@ -1,6 +1,6 @@
-# VIRALCAST
+# RamAI
 
-Django MVP scaffold. Full product spec: [VIRALCAST_PRD.md](VIRALCAST_PRD.md).
+Django MVP scaffold. Full product spec: [RamAI_PRD.md](RamAI_PRD.md).
 
 ## Quickstart
 

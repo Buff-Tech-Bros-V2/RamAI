@@ -1,3 +1,5 @@
+import json
+
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -29,6 +31,9 @@ def index(request):
     recent_history = list(sku.observations.order_by("-timestamp")[:24])
     recent_history.reverse()
 
+    # Build inline chart data for Chart.js (no extra API call needed)
+    chart_data_json = _build_chart_json(recent_history, result)
+
     context.update(
         {
             "sku": sku,
@@ -37,9 +42,26 @@ def index(request):
             "recent_history": recent_history,
             "whatif": overrides,
             "drafts": sku.action_plan_drafts.all()[:5],
+            "chart_data_json": chart_data_json,
         }
     )
     return render(request, "dashboard/index.html", context)
+
+
+def _build_chart_json(recent_history, result) -> str:
+    """Build JSON string for inline Chart.js data."""
+    demand = {
+        "timestamps": [obs.timestamp.strftime("%d/%m %H:%M") for obs in recent_history],
+        "orders": [obs.orders_created for obs in recent_history],
+        "stock": [obs.stock_on_hand for obs in recent_history],
+    }
+    forecast = {
+        "labels": [f"{f.horizon_hours} jam" for f in result["forecasts"]],
+        "p10": [f.p10 for f in result["forecasts"]],
+        "p50": [f.p50 for f in result["forecasts"]],
+        "p90": [f.p90 for f in result["forecasts"]],
+    }
+    return json.dumps({"demand": demand, "forecast": forecast})
 
 
 def _parse_overrides(request) -> dict:
