@@ -1,7 +1,7 @@
 """
-Django settings for the VIRALCAST MVP.
+Django settings for the RamAI MVP.
 
-See VIRALCAST_PRD.md for the product spec. This settings module is kept
+See RamAI_PRD.md for the product spec. This settings module is kept
 intentionally minimal for the 24-hour hackathon MVP scope.
 """
 
@@ -23,7 +23,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
-    # VIRALCAST apps. Kept as separate Django apps so each concern
+    # RamAI apps. Kept as separate Django apps so each concern
     # (data, forecasting, decision logic, agent orchestration, UI) can be
     # developed and swapped independently. See README.md for the map of
     # which modules are placeholders vs. real logic.

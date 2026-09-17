@@ -56,8 +56,12 @@ class DecisionEngine:
         unit_variable_cost = float(decision_config.unit_variable_cost)
         salvage_value_per_unit = float(decision_config.salvage_value_per_unit)
 
+        # `daily_capacity_minutes` is a per-day figure, but demand is cumulative
+        # over the whole forecast horizon (e.g. 48h = 2 days) -- scale capacity
+        # to the horizon so it isn't under-counted by ~horizon_days times.
+        horizon_days = forecast.horizon_hours / 24
         max_units_capacity = (
-            capacity_minutes / production_minutes_per_unit
+            (capacity_minutes * horizon_days) / production_minutes_per_unit
             if production_minutes_per_unit
             else float("inf")
         )
@@ -160,10 +164,16 @@ class DecisionEngine:
         committed_total = commit_now_units + commit_later_units
         delay_risk = DELAY_RISK_FRACTION[action]
 
-        effective_committed = committed_total * (1 - delay_risk)
-        delivered = min(effective_committed, demand_p50)
+        # `committed_total` units are produced/paid for regardless of delay
+        # risk. Delay risk only shrinks how much of the demand-matching
+        # portion actually arrives on time to be sold (delivered/lost); it
+        # must NOT shrink the base used for the residual-stock calculation,
+        # otherwise a riskier, later commitment would look like it wastes
+        # less stock than committing now -- which is backwards.
+        raw_deliverable = min(committed_total, demand_p50)
+        delivered = raw_deliverable * (1 - delay_risk)
         lost_units = max(demand_p50 - delivered, 0)
-        residual_units = max(effective_committed - demand_p50, 0)
+        residual_units = max(committed_total - delivered, 0)
 
         revenue = delivered * unit_selling_price
         variable_cost = committed_total * unit_variable_cost
