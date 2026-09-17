@@ -1,6 +1,6 @@
 {
   "dataset_version": "synthetic-v1",
-  "generated_at": "2026-09-17T16:27:31.159799+07:00",
+  "generated_at": "2026-09-17T16:31:59.614971+07:00",
   "seed": 42,
   "days": 90,
   "timezone": "Asia/Jakarta (+07:00)",
@@ -21,8 +21,8 @@
     "FADING_SURGE": 6,
     "FALSE_CONTENT": 6
   },
-  "stockout_share": 0.175,
-  "content_missing_share": 0.15583333333333332,
+  "stockout_share": 0.06388888888888888,
+  "content_missing_share": 0.15194444444444444,
   "rows_per_split": {
     "train": 7560,
     "val": 1620,

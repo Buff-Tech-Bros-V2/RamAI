@@ -31,9 +31,8 @@ Everything is reproducible from `--seed`. Same seed → byte-identical files.
 
 `target_censored_{H}h(t) = 1` when any hour in that window had `stockout_flag = 1`.
 **Drop or downweight those rows when training** — otherwise the model learns
-"empty shelf ⇒ zero demand". Roughly 54–67% of labels are uncensored (24h: 66.6%,
-48h: 57.9%, 72h: 54.1%), which leaves only 451–864 usable test rows per horizon.
-Raising that share is the single highest-value improvement left in the dataset.
+"empty shelf ⇒ zero demand". Roughly 74–85% of labels are uncensored (24h: 84.6%,
+48h: 77.7%, 72h: 73.6%), leaving 1,092–1,405 usable test rows per horizon.
 
 The last H hours of each series have a null target by construction.
 
@@ -83,15 +82,17 @@ Feature code must handle all-null content and set a `content_features_used` flag
 
 Multi-seed (3 seeds) test-split results, transaction-only vs transaction-plus-content:
 
-| Question | 24h | 48h | 72h |
+| Content lift | 24h | 48h | 72h |
 | --- | --- | --- | --- |
-| Point accuracy (WAPE lift from content) | −6.0% | −0.4% | **+13.0%** |
-| Surge persistence (AUC lift from content) | **+0.048** | **+0.229** | **+0.170** |
+| Point accuracy (WAPE) | −6.4% | −3.6% | +4.0% |
+| Surge persistence (AUC) | +0.062 | +0.030 | −0.064 |
 
-Content does **not** reliably improve the unit-count forecast — it hurts at 24h, where
-the conversion lag means the spike has not converted yet. It clearly improves the
-*persistence* judgement at every horizon, which is the question the decision engine
-actually asks. Both effects follow from the conversion-lag assumption above.
+**Content features do not clearly help on this data.** The one consistent effect across
+every version of the dataset is that content *hurts* short-horizon point accuracy: with
+an 8–40 h conversion lag, a spike visible now has not converted inside 24 h, and the
+model over-reacts to it.
 
-Caveat: stockout censoring leaves only 451–864 usable test rows per horizon, so these
-are small test sets. The seed-to-seed spread is reported alongside every number.
+An earlier run on a more heavily censored dataset showed a large persistence gain
+(AUC +0.229 at 48 h). That did not survive fixing the censoring rate — it came from
+1.2k-row test sets shrinking to 0.5k under selection. Treat any content advantage as
+unproven until it holds on a larger test set.

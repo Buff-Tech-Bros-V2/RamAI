@@ -366,7 +366,11 @@ def simulate_sku(sku: SkuSpec, cfg: GeneratorConfig, index: pd.DatetimeIndex,
         if t > 0 and t % interval == 0:
             recent = orders_created[max(0, t - interval):t].sum()
             baseline = sku.base_level * HOUR_PROFILE.mean() * interval
-            planned = max(recent, baseline * 0.8) * float(rng.uniform(1.0, 1.15))
+            # Safety buffer: real sellers hold cover above last period's sales.
+            # Without it, censoring ran at 33-46% of label windows and starved
+            # the test set. Surges still outrun stock because the planner only
+            # ever sees PAST observed sales -- that is the censoring we want.
+            planned = max(recent, baseline) * float(rng.uniform(1.02, 1.20))
             qty = int(max(rng.normal(planned, planned * 0.10), 0))
             if rng.random() < 0.12:          # supplier shortfall / late batch
                 qty = int(qty * rng.uniform(0.35, 0.7))
