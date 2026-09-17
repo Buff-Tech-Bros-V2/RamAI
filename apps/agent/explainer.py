@@ -2,7 +2,7 @@
 Explanation layer (PRD section 8.4 / `explain_recommendation` tool).
 
 Provides AI-driven operational decision explanation for merchants:
-1. `GeminiLLMExplainer`: uses Google Gemini 1.5 Flash to synthesize human-readable,
+1. `GeminiLLMExplainer`: uses Google Gemini (flash-tier) to synthesize human-readable,
    executive-level Indonesian summaries from the `ExplanationPacket`.
 2. `DummyLLMExplainer`: deterministic template fallback that works offline or when
    no API key is provided.
@@ -14,10 +14,14 @@ No invented numbers, no recomputation -- only facts from the ExplanationPacket.
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+
+logger = logging.getLogger(__name__)
 from pathlib import Path
 
 from .dataclasses import ExplanationPacket
@@ -100,7 +104,7 @@ class DummyLLMExplainer(LLMExplainer):
 
 
 class GeminiLLMExplainer(LLMExplainer):
-    """Real LLM explanation powered by Google Gemini (1.5 Flash).
+    """Real LLM explanation powered by Google Gemini (flash-tier).
 
     Uses zero-dependency standard library urllib for maximum reliability.
     Falls back gracefully to DummyLLMExplainer on any network error or quota exhaustion.
@@ -108,10 +112,12 @@ class GeminiLLMExplainer(LLMExplainer):
 
     is_llm: bool = True
 
-    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash", timeout_sec: int = 10):
+    def __init__(self, api_key: str, model_name: str = "gemini-3.6-flash", timeout_sec: int = 15,
+                 max_retries: int = 2):
         self.api_key = api_key
         self.model_name = model_name
         self.timeout_sec = timeout_sec
+        self.max_retries = max_retries
         self.fallback = DummyLLMExplainer()
 
     def _build_prompt(self, packet: ExplanationPacket) -> str:
@@ -166,8 +172,11 @@ ATURAN KETAT PENULISAN (COMPLIANCE):
    - Poin penting waktu evaluasi ulang berikutnya sebelum batas deadline.
 """
 
-    def explain(self, packet: ExplanationPacket) -> str:
-        prompt = self._build_prompt(packet)
+    # HTTP statuses worth a short retry: rate limiting and transient overload.
+    _RETRYABLE_STATUSES = {429, 503}
+
+    def _call_gemini_once(self, prompt: str) -> str | None:
+        """Single request attempt. Returns text, or None if no usable text came back."""
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent"
             f"?key={self.api_key}"
@@ -181,30 +190,79 @@ ATURAN KETAT PENULISAN (COMPLIANCE):
             ],
             "generationConfig": {
                 "temperature": 0.2,
-                "maxOutputTokens": 800,
+                "maxOutputTokens": 1500,
+                # Flash-tier "thinking" models otherwise spend part of the
+                # output budget on hidden reasoning tokens before writing
+                # the visible answer, which truncates short responses.
+                "thinkingConfig": {"thinkingBudget": 0},
             },
         }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=self.timeout_sec) as response:
+            if response.status != 200:
+                return None
+            data = json.loads(response.read().decode("utf-8"))
+            candidates = data.get("candidates", [])
+            if not candidates:
+                return None
+            parts = candidates[0].get("content", {}).get("parts", [])
+            text = "".join(p.get("text", "") for p in parts).strip()
+            if not text:
+                logger.warning(
+                    "Gemini returned no text (finishReason=%s).",
+                    candidates[0].get("finishReason"),
+                )
+            return text or None
 
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={"Content-Type": "application/json"},
-            )
-            with urllib.request.urlopen(req, timeout=self.timeout_sec) as response:
-                if response.status == 200:
-                    data = json.loads(response.read().decode("utf-8"))
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts and "text" in parts[0]:
-                            text = parts[0]["text"].strip()
-                            if text:
-                                return text
-        except Exception:
-            # On any network timeout, invalid key, or API rate limit,
-            # gracefully fall back to deterministic template
-            pass
+    def explain(self, packet: ExplanationPacket) -> str:
+        prompt = self._build_prompt(packet)
+
+        attempt = 0
+        while attempt <= self.max_retries:
+            attempt += 1
+            try:
+                text = self._call_gemini_once(prompt)
+                if text:
+                    return text
+                break  # 200 OK but no usable text -- retrying won't help
+            except urllib.error.HTTPError as e:
+                body = ""
+                try:
+                    body = e.read().decode("utf-8")[:500]
+                except Exception:
+                    pass
+                if e.code in self._RETRYABLE_STATUSES and attempt <= self.max_retries:
+                    logger.warning(
+                        "Gemini API transient error (HTTP %s), retrying (%d/%d). Body: %s",
+                        e.code, attempt, self.max_retries, body,
+                    )
+                    time.sleep(0.5 * attempt)
+                    continue
+                logger.warning(
+                    "Gemini API call failed (HTTP %s), falling back to template. Body: %s",
+                    e.code, body,
+                )
+                break
+            except (urllib.error.URLError, TimeoutError) as e:
+                if attempt <= self.max_retries:
+                    logger.warning(
+                        "Gemini API network error (%s), retrying (%d/%d).",
+                        e, attempt, self.max_retries,
+                    )
+                    time.sleep(0.5 * attempt)
+                    continue
+                logger.warning("Gemini API call failed (%s: %s), falling back to template.",
+                              type(e).__name__, e)
+                break
+            except Exception as e:
+                # Any unexpected error: gracefully fall back, no retry.
+                logger.warning("Gemini API call failed (%s: %s), falling back to template.",
+                              type(e).__name__, e)
+                break
 
         return self.fallback.explain(packet)
 
