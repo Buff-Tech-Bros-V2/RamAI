@@ -1,4 +1,4 @@
-{% load humanize static %}
+{% load humanize static ramai_labels %}
 {% with rec=result.decision.recommended %}
 
 <section class="attention-panel animate-in" aria-labelledby="attention-title">
@@ -49,21 +49,21 @@
             <span class="confidence-badge confidence-{{ result.decision.confidence|lower }}">Keyakinan {{ result.decision.confidence }}</span>
         </div>
         <div class="recommendation-title">
-            {% if rec.action == "COMMIT_NOW" %}Produksi atau beli stok sekarang
-            {% elif rec.action == "STAGED_COMMITMENT" %}Mulai bertahap, tambah saat sinyal menguat
-            {% else %}Tunggu data berikutnya sebelum berkomitmen{% endif %}
+            {% if rec.action == "COMMIT_NOW" %}Siapkan stok sekarang
+            {% elif rec.action == "STAGED_COMMITMENT" %}Siapkan bertahap, tambah saat permintaan makin pasti
+            {% else %}Tunggu dulu sampai data berikutnya masuk{% endif %}
         </div>
         <p class="recommendation-summary">
             {% if rec.action == "COMMIT_NOW" %}Amankan permintaan lebih cepat untuk menekan risiko kehabisan stok.
             {% elif rec.action == "STAGED_COMMITMENT" %}Jaga ketersediaan barang tanpa mengikat seluruh modal sejak awal.
-            {% else %}Pertahankan modal sambil menunggu kepastian permintaan berikutnya.{% endif %}
+            {% else %}Tahan dulu modalnya sambil menunggu kepastian permintaan berikutnya.{% endif %}
         </p>
         <div class="recommendation-metrics">
-            <div><span>Mulai sekarang</span><strong>{{ rec.commit_now_units }} unit</strong></div>
-            <div><span>Susulan</span><strong>{{ rec.commit_later_units }} unit</strong></div>
+            <div><span>Disiapkan sekarang</span><strong>{{ rec.commit_now_units }} unit</strong></div>
+            <div><span>Tambahan menyusul</span><strong>{{ rec.commit_later_units }} unit</strong></div>
             <div><span>Modal dibutuhkan</span><strong>Rp{{ rec.required_capital|floatformat:0|intcomma }}</strong></div>
-            <div><span>Estimasi kontribusi</span><strong>Rp{{ rec.expected_contribution|floatformat:0|intcomma }}</strong></div>
-            {% if rec.required_material %}<div><span>Kebutuhan material</span><strong>{{ rec.required_material|floatformat:"-2" }}</strong></div>{% endif %}
+            <div><span>Perkiraan untung kotor</span><strong>Rp{{ rec.expected_contribution|floatformat:0|intcomma }}</strong></div>
+            {% if rec.required_material %}<div><span>Bahan yang dibutuhkan</span><strong>{{ rec.required_material|floatformat:"-2" }}</strong></div>{% endif %}
         </div>
         <div class="recommendation-footer">
             {% if user.is_authenticated %}
@@ -127,7 +127,7 @@
         <summary>Lihat angka forecast P10, P50, dan P90</summary>
         <div class="detail-panel-body table-scroll">
             <table class="ram-table">
-                <thead><tr><th>Horizon</th><th class="text-end">Pesimis (P10)</th><th class="text-end">Wajar (P50)</th><th class="text-end">Optimis (P90)</th></tr></thead>
+                <thead><tr><th>Jangka waktu</th><th class="text-end">Pesimis (P10)</th><th class="text-end">Wajar (P50)</th><th class="text-end">Optimis (P90)</th></tr></thead>
                 <tbody>{% for f in result.forecasts %}<tr><td>{{ f.horizon_hours }} jam</td><td class="text-end">{{ f.p10|floatformat:0 }}</td><td class="text-end"><strong>{{ f.p50|floatformat:0 }}</strong></td><td class="text-end">{{ f.p90|floatformat:0 }}</td></tr>{% endfor %}</tbody>
             </table>
         </div>
@@ -153,7 +153,7 @@
         <ol class="plan-steps">
             <li><span>1</span><div><strong>Siapkan {{ rec.commit_now_units }} unit</strong><p>Gunakan batas modal yang sudah diperiksa decision engine.</p></div></li>
             <li><span>2</span><div><strong>Pantau order berikutnya</strong><p>Perhatikan perubahan demand dan ketersediaan stok.</p></div></li>
-            <li><span>3</span><div><strong>Evaluasi {{ rec.reevaluate_at|date:"d M, H:i" }}</strong><p>Hitung ulang sebelum menambah {{ rec.commit_later_units }} unit susulan.</p></div></li>
+            <li><span>3</span><div><strong>Evaluasi {{ rec.reevaluate_at|date:"d M, H:i" }}</strong><p>Hitung ulang sebelum menambah {{ rec.commit_later_units }} unit berikutnya.</p></div></li>
         </ol>
     </article>
 </section>
@@ -169,12 +169,12 @@
     </details>
     <details class="detail-panel animate-in">
         <summary>Order aktual 24 jam terakhir</summary>
-        <div class="detail-panel-body table-scroll"><table class="ram-table"><thead><tr><th>Jam</th><th class="text-end">Order</th><th class="text-end">Stok</th><th>Status</th></tr></thead><tbody>{% for obs in recent_history %}<tr><td>{{ obs.timestamp|date:"d M H:i" }}</td><td class="text-end"><strong>{{ obs.orders_created }}</strong></td><td class="text-end">{{ obs.stock_on_hand }}</td><td>{% if obs.stockout_flag %}<span class="badge-stockout">Stockout</span>{% else %}<span class="status-ok">Normal</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+        <div class="detail-panel-body table-scroll"><table class="ram-table"><thead><tr><th>Jam</th><th class="text-end">Order</th><th class="text-end">Stok</th><th>Status</th></tr></thead><tbody>{% for obs in recent_history %}<tr><td>{{ obs.timestamp|date:"d M H:i" }}</td><td class="text-end"><strong>{{ obs.orders_created }}</strong></td><td class="text-end">{{ obs.stock_on_hand }}</td><td>{% if obs.stockout_flag %}<span class="badge-stockout">Kehabisan stok</span>{% else %}<span class="status-ok">Normal</span>{% endif %}</td></tr>{% endfor %}</tbody></table></div>
     </details>
     <details class="detail-panel animate-in" {% if drafts %}open{% endif %}>
         <summary>Rencana tersimpan{% if drafts %} ({{ drafts|length }}){% endif %}</summary>
         <div class="detail-panel-body table-scroll">
-            {% if drafts %}<table class="ram-table"><thead><tr><th>Waktu</th><th>Aksi</th><th class="text-end">Sekarang</th><th class="text-end">Susulan</th><th class="text-end">Modal</th></tr></thead><tbody>{% for d in drafts %}<tr><td>{{ d.approved_at|date:"d M H:i" }}</td><td>{{ d.recommended_action }}</td><td class="text-end">{{ d.commit_now_units }} unit</td><td class="text-end">{{ d.commit_later_units }} unit</td><td class="text-end">Rp{{ d.required_capital|floatformat:0|intcomma }}</td></tr>{% endfor %}</tbody></table>{% else %}<div class="empty-inline">Belum ada rencana yang disimpan untuk produk ini.</div>{% endif %}
+            {% if drafts %}<table class="ram-table"><thead><tr><th>Waktu</th><th>Tindakan</th><th class="text-end">Sekarang</th><th class="text-end">Menyusul</th><th class="text-end">Modal</th></tr></thead><tbody>{% for d in drafts %}<tr><td>{{ d.approved_at|date:"d M H:i" }}</td><td>{{ d.recommended_action|action_label }}</td><td class="text-end">{{ d.commit_now_units }} unit</td><td class="text-end">{{ d.commit_later_units }} unit</td><td class="text-end">Rp{{ d.required_capital|floatformat:0|intcomma }}</td></tr>{% endfor %}</tbody></table>{% else %}<div class="empty-inline">Belum ada rencana yang disimpan untuk produk ini.</div>{% endif %}
         </div>
     </details>
 </section>

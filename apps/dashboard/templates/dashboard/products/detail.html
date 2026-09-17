@@ -1,16 +1,16 @@
 {% extends "dashboard/base.html" %}
-{% load humanize %}
+{% load humanize ramai_labels %}
 
 {% block title %}{{ product.name }} — RamAI{% endblock %}
 {% block page_title %}Detail Produk{% endblock %}
 
 {% block content %}
 <header class="page-heading product-detail-heading">
-    <div><a href="{% url 'dashboard:product_list' %}" class="back-link">← Kembali ke produk</a><div class="eyebrow">{{ product.sku_id }} · {{ product.product_category }}</div><h1>{{ product.name }}</h1><p>Profil produk dan batas operasional yang dipakai oleh decision engine.</p></div>
-    <div class="page-actions">{% if user.is_authenticated %}<a href="{% url 'dashboard:product_edit' product.sku_id %}" class="ram-btn ram-btn-ghost">Edit produk</a>{% endif %}{% if latest %}<a href="{% url 'dashboard:decision_center' product.sku_id %}" class="ram-btn ram-btn-primary">Buka Decision Center</a>{% endif %}</div>
+    <div><a href="{% url 'dashboard:product_list' %}" class="back-link">← Kembali ke produk</a><div class="eyebrow">{{ product.sku_id }} · {{ product.product_category }}</div><h1>{{ product.name }}</h1><p>Profil produk dan batas operasional yang dipakai RamAI saat menghitung rekomendasi.</p></div>
+    <div class="page-actions">{% if user.is_authenticated %}<a href="{% url 'dashboard:product_edit' product.sku_id %}" class="ram-btn ram-btn-ghost">Edit produk</a>{% endif %}{% if latest %}<a href="{% url 'dashboard:decision_center' product.sku_id %}" class="ram-btn ram-btn-primary">Buka Pusat Keputusan</a>{% endif %}</div>
 </header>
 
-{% if not latest %}<div class="ram-alert ram-alert-info"><span class="ram-alert-icon">i</span><span>Produk sudah tersimpan, tetapi belum memiliki data observasi. Import data sebelum menjalankan analisis.</span></div>{% endif %}
+{% if not latest %}<div class="ram-alert ram-alert-info"><span class="ram-alert-icon">i</span><span>Produk sudah tersimpan, tetapi belum memiliki riwayat penjualan. Impor datanya dulu sebelum menjalankan analisis.</span></div>{% endif %}
 
 <section class="detail-kpi-grid">
     <article><span>Stok terakhir</span><strong>{% if latest %}{{ latest.stock_on_hand }} unit{% else %}—{% endif %}</strong><small>{% if latest %}{{ latest.timestamp|date:"d M Y, H:i" }}{% else %}Belum ada data{% endif %}</small></article>
@@ -20,8 +20,8 @@
 </section>
 
 <section class="detail-columns">
-    <article class="info-card"><div class="eyebrow">Konfigurasi utama</div><h2>Operasional</h2><dl class="info-list"><div><dt>Mode</dt><dd>{{ product.decision_config.get_operation_mode_display }}</dd></div><div><dt>Profil batas</dt><dd>{{ product.decision_config.get_constraint_profile_display }}</dd></div><div><dt>Kapasitas harian</dt><dd>{% if product.decision_config.daily_capacity_minutes %}{{ product.decision_config.daily_capacity_minutes|floatformat:0 }} menit{% else %}Tidak dibatasi{% endif %}</dd></div><div><dt>Minimum commitment</dt><dd>{{ product.decision_config.minimum_commitment }} unit</dd></div><div><dt>Jendela keputusan</dt><dd>{{ product.decision_config.decision_window_hours }} jam dari tiap analisis</dd></div></dl></article>
-    <article class="info-card"><div class="eyebrow">Parameter produk</div><h2>Ekonomi & pemenuhan</h2><dl class="info-list"><div><dt>Lead time supplier</dt><dd>{{ product.decision_config.supplier_lead_time_hours|default:"—" }} jam</dd></div><div><dt>Produksi per unit</dt><dd>{{ product.decision_config.production_minutes_per_unit|default:"—" }} menit</dd></div><div><dt>Masa simpan</dt><dd>{{ product.decision_config.shelf_life_hours|default:"—" }} jam</dd></div><div><dt>Nilai sisa</dt><dd>Rp{{ product.decision_config.salvage_value_per_unit|floatformat:0|intcomma }}</dd></div><div><dt>Kode toko</dt><dd>{{ product.shop_id }}</dd></div></dl></article>
-    <article class="info-card"><div class="eyebrow">Keputusan sebelumnya</div><h2>Rencana terbaru</h2>{% if recent_drafts %}<div class="mini-timeline">{% for draft in recent_drafts %}<div><span></span><p><strong>{{ draft.recommended_action }}</strong><small>{{ draft.approved_at|date:"d M, H:i" }} · {{ draft.commit_now_units }} unit</small></p></div>{% endfor %}</div>{% else %}<div class="empty-inline">Belum ada rencana tersimpan.</div>{% endif %}</article>
+    <article class="info-card"><div class="eyebrow">Konfigurasi utama</div><h2>Operasional</h2><dl class="info-list"><div><dt>Mode</dt><dd>{{ product.decision_config.get_operation_mode_display }}</dd></div><div><dt>Profil batas</dt><dd>{{ product.decision_config.get_constraint_profile_display }}</dd></div><div><dt>Kapasitas harian</dt><dd>{% if product.decision_config.daily_capacity_minutes %}{{ product.decision_config.daily_capacity_minutes|floatformat:0 }} menit{% else %}Tidak dibatasi{% endif %}</dd></div><div><dt>Minimum sekali pesan/produksi</dt><dd>{{ product.decision_config.minimum_commitment }} unit</dd></div><div><dt>Batas waktu keputusan</dt><dd>{{ product.decision_config.decision_window_hours }} jam dari tiap analisis</dd></div></dl></article>
+    <article class="info-card"><div class="eyebrow">Parameter produk</div><h2>Biaya & pemenuhan stok</h2><dl class="info-list"><div><dt>Waktu kirim supplier</dt><dd>{{ product.decision_config.supplier_lead_time_hours|default:"—" }} jam</dd></div><div><dt>Produksi per unit</dt><dd>{{ product.decision_config.production_minutes_per_unit|default:"—" }} menit</dd></div><div><dt>Masa simpan</dt><dd>{{ product.decision_config.shelf_life_hours|default:"—" }} jam</dd></div><div><dt>Nilai sisa</dt><dd>Rp{{ product.decision_config.salvage_value_per_unit|floatformat:0|intcomma }}</dd></div><div><dt>Kode toko</dt><dd>{{ product.shop_id }}</dd></div></dl></article>
+    <article class="info-card"><div class="eyebrow">Keputusan sebelumnya</div><h2>Rencana terbaru</h2>{% if recent_drafts %}<div class="mini-timeline">{% for draft in recent_drafts %}<div><span></span><p><strong>{{ draft.recommended_action|action_label }}</strong><small>{{ draft.approved_at|date:"d M, H:i" }} · {{ draft.commit_now_units }} unit</small></p></div>{% endfor %}</div>{% else %}<div class="empty-inline">Belum ada rencana tersimpan.</div>{% endif %}</article>
 </section>
 {% endblock %}

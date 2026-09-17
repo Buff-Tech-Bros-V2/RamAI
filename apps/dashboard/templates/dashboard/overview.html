@@ -1,5 +1,5 @@
 {% extends "dashboard/base.html" %}
-{% load humanize %}
+{% load humanize ramai_labels %}
 
 {% block title %}Beranda — RamAI{% endblock %}
 {% block page_title %}Beranda{% endblock %}
@@ -17,7 +17,7 @@
 </header>
 
 <section class="overview-kpis" aria-label="Ringkasan bisnis">
-    <article><span>Total produk</span><strong>{{ product_count }}</strong><small>SKU terdaftar</small></article>
+    <article><span>Total produk</span><strong>{{ product_count }}</strong><small>produk terdaftar</small></article>
     <article><span>Perlu perhatian</span><strong>{{ attention_count }}</strong><small>produk perlu ditinjau</small></article>
     <article><span>Total stok</span><strong>{{ total_stock|intcomma }}</strong><small>unit tersedia</small></article>
     <article><span>Rencana tersimpan</span><strong>{{ draft_count }}</strong><small>keputusan disetujui</small></article>
@@ -42,7 +42,7 @@
             <div class="priority-stats">
                 <div><span>Stok</span><strong>{{ item.stock }} unit</strong></div>
                 <div><span>Demand bertahan</span><strong>{% widthratio item.persistence 1 100 %}%</strong></div>
-                <div><span>Rekomendasi</span><strong>{% if item.recommended.action == 'COMMIT_NOW' %}Commit sekarang{% elif item.recommended.action == 'STAGED_COMMITMENT' %}Bertahap{% elif item.recommended %}Tunggu{% else %}Belum tersedia{% endif %}</strong></div>
+                <div><span>Rekomendasi</span><strong>{{ item.recommended.action|action_label_short }}</strong></div>
             </div>
             <div class="priority-actions">
                 <a href="{% url 'dashboard:product_detail' item.sku.sku_id %}" class="ram-btn ram-btn-ghost">Lihat produk</a>
@@ -73,8 +73,8 @@
     <div class="ram-table-wrapper">
         {% if recent_drafts %}
         <table class="ram-table">
-            <thead><tr><th>Waktu</th><th>Produk</th><th>Aksi</th><th class="text-end">Unit sekarang</th><th class="text-end">Modal</th></tr></thead>
-            <tbody>{% for draft in recent_drafts %}<tr><td>{{ draft.approved_at|date:"d M Y, H:i" }}</td><td><a href="{% url 'dashboard:product_detail' draft.sku.sku_id %}">{{ draft.sku.name }}</a></td><td>{{ draft.recommended_action }}</td><td class="text-end">{{ draft.commit_now_units }}</td><td class="text-end">Rp{{ draft.required_capital|floatformat:0|intcomma }}</td></tr>{% endfor %}</tbody>
+            <thead><tr><th>Waktu</th><th>Produk</th><th>Tindakan</th><th class="text-end">Unit sekarang</th><th class="text-end">Modal</th></tr></thead>
+            <tbody>{% for draft in recent_drafts %}<tr><td>{{ draft.approved_at|date:"d M Y, H:i" }}</td><td><a href="{% url 'dashboard:product_detail' draft.sku.sku_id %}">{{ draft.sku.name }}</a></td><td>{{ draft.recommended_action|action_label }}</td><td class="text-end">{{ draft.commit_now_units }}</td><td class="text-end">Rp{{ draft.required_capital|floatformat:0|intcomma }}</td></tr>{% endfor %}</tbody>
         </table>
         {% else %}<div class="empty-inline">Belum ada rencana yang disimpan.</div>{% endif %}
     </div>

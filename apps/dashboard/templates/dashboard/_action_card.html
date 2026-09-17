@@ -5,9 +5,9 @@
         <div>
             <span class="action-number">{% if candidate.action == 'COMMIT_NOW' %}01{% elif candidate.action == 'STAGED_COMMITMENT' %}02{% else %}03{% endif %}</span>
             <h3 class="action-card-title">
-                {% if candidate.action == "COMMIT_NOW" %}Commit Sekarang
-                {% elif candidate.action == "STAGED_COMMITMENT" %}Commit Bertahap
-                {% else %}Tunggu Dulu{% endif %}
+                {% if candidate.action == "COMMIT_NOW" %}Siapkan stok sekarang
+                {% elif candidate.action == "STAGED_COMMITMENT" %}Siapkan bertahap
+                {% else %}Tunggu dulu{% endif %}
             </h3>
         </div>
         {% if is_recommended %}<span class="recommended-badge">Rekomendasi</span>{% endif %}
@@ -17,19 +17,19 @@
         {% elif candidate.action == "STAGED_COMMITMENT" %}Mulai secukupnya, lalu tambah ketika sinyal semakin pasti.
         {% else %}Tahan modal sekarang sambil menerima risiko kehilangan penjualan.{% endif %}
     </p>
-    <div class="action-primary-value"><span>Mulai sekarang</span><strong>{{ candidate.commit_now_units }} unit</strong></div>
+    <div class="action-primary-value"><span>Disiapkan sekarang</span><strong>{{ candidate.commit_now_units }} unit</strong></div>
     <div class="action-summary-grid">
         <div><span>Modal</span><strong>Rp{{ candidate.required_capital|floatformat:0|intcomma }}</strong></div>
-        <div><span>Fill rate</span><strong>{% widthratio candidate.expected_fill_rate 1 100 %}%</strong></div>
+        <div><span>Permintaan terpenuhi</span><strong>{% widthratio candidate.expected_fill_rate 1 100 %}%</strong></div>
     </div>
     <details class="action-details">
         <summary>Lihat risiko dan detail</summary>
         <div class="action-details-body">
-            <div><span>Unit susulan</span><strong>{{ candidate.commit_later_units }} unit</strong></div>
-            <div><span>Estimasi kontribusi</span><strong>Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}</strong></div>
+            <div><span>Tambahan menyusul</span><strong>{{ candidate.commit_later_units }} unit</strong></div>
+            <div><span>Perkiraan untung kotor</span><strong>Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}</strong></div>
             <div><span>Penjualan berisiko hilang</span><strong class="risk">{{ candidate.expected_lost_units|floatformat:0 }} unit</strong></div>
             <div><span>Risiko stok tersisa</span><strong class="risk">{{ candidate.residual_stock_risk_units|floatformat:0 }} unit</strong></div>
-            {% if candidate.required_material %}<div><span>Kebutuhan material</span><strong>{{ candidate.required_material|floatformat:"-2" }}</strong></div>{% endif %}
+            {% if candidate.required_material %}<div><span>Bahan yang dibutuhkan</span><strong>{{ candidate.required_material|floatformat:"-2" }}</strong></div>{% endif %}
             <div><span>Evaluasi kembali</span><strong>{{ candidate.reevaluate_at|date:"d M, H:i" }}</strong></div>
         </div>
     </details>

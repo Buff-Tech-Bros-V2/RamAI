@@ -81,9 +81,9 @@ class DecisionConfigForm(StyledModelForm):
             "unit_selling_price": "Harga jual per unit",
             "unit_variable_cost": "Biaya per unit",
             "production_minutes_per_unit": "Waktu produksi per unit",
-            "material_per_unit": "Material per unit",
-            "supplier_lead_time_hours": "Lead time supplier",
-            "minimum_commitment": "Minimum produksi/pemesanan",
+            "material_per_unit": "Bahan per unit",
+            "supplier_lead_time_hours": "Waktu kirim supplier",
+            "minimum_commitment": "Minimum sekali pesan/produksi",
             "shelf_life_hours": "Masa simpan",
             "salvage_value_per_unit": "Nilai sisa per unit",
             "daily_capacity_minutes": "Kapasitas harian",
@@ -94,7 +94,7 @@ class DecisionConfigForm(StyledModelForm):
             "operation_mode": "Menentukan batasan mana yang perlu diisi di bawah.",
             "constraint_profile": "Mengisi otomatis masa simpan, minimum, dan tenggat.",
             "decision_window_hours": "Jam dari sekarang, bukan tanggal tetap.",
-            "material_per_unit": "Opsional. Dipakai untuk menghitung kebutuhan material.",
+            "material_per_unit": "Opsional. Dipakai untuk menghitung kebutuhan bahan baku.",
         }
 
     #: Fields shown only when the matching operation mode is selected.

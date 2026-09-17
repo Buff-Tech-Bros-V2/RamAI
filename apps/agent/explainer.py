@@ -29,10 +29,13 @@ from pathlib import Path
 
 from .dataclasses import ExplanationPacket
 
+# Plain-Indonesian phrasing, matched to the dashboard labels in
+# apps/dashboard/templatetags/ramai_labels.py. A seller reading the
+# explanation should never meet the word "commit".
 ACTION_LABELS = {
-    "COMMIT_NOW": "commit penuh sekarang",
-    "STAGED_COMMITMENT": "commit bertahap",
-    "WAIT": "menunggu dulu sebelum commit",
+    "COMMIT_NOW": "siapkan stok sekarang",
+    "STAGED_COMMITMENT": "siapkan stok bertahap",
+    "WAIT": "tunggu dulu sebelum menambah stok",
 }
 
 
@@ -72,21 +75,21 @@ class DummyLLMExplainer(LLMExplainer):
         if rec.commit_now_units:
             headline += f", {rec.commit_now_units} unit sekarang"
         if rec.commit_later_units:
-            headline += f" dan {rec.commit_later_units} unit susulan"
+            headline += f" dan {rec.commit_later_units} unit menyusul"
         headline += f". Evaluasi ulang pukul {rec.reevaluate_at:%H:%M}."
 
         reasons = [
             f"- {decision.surge_persistence_48h * 100:.0f}% skenario menunjukkan demand "
             "kemungkinan masih di atas baseline dalam 48 jam.",
-            f"- Expected contribution Rp{rec.expected_contribution:,.0f} dengan "
-            f"fill rate {rec.expected_fill_rate * 100:.0f}%.",
+            f"- Perkiraan untung kotor Rp{rec.expected_contribution:,.0f} dengan "
+            f"{rec.expected_fill_rate * 100:.0f}% permintaan terpenuhi.",
         ]
         for alt in decision.alternatives:
             alt_label = ACTION_LABELS.get(alt.action, alt.action)
             reasons.append(
-                f"- Alternatif '{alt_label}': expected contribution "
-                f"Rp{alt.expected_contribution:,.0f}, lost sales "
-                f"{alt.expected_lost_units:.0f} unit, residual-stock risk "
+                f"- Alternatif '{alt_label}': perkiraan untung kotor "
+                f"Rp{alt.expected_contribution:,.0f}, penjualan berisiko hilang "
+                f"{alt.expected_lost_units:.0f} unit, risiko stok tersisa "
                 f"{alt.residual_stock_risk_units:.0f} unit."
             )
 
@@ -146,7 +149,7 @@ class _HTTPLLMExplainer(LLMExplainer):
 
         alternatives_text = "\n".join(
             f"- Opsi '{ACTION_LABELS.get(alt.action, alt.action)}': Untung Bersih Rp{alt.expected_contribution:,.0f}, "
-            f"Lost Sales {alt.expected_lost_units:.0f} unit, Risiko Barang Sisa {alt.residual_stock_risk_units:.0f} unit, "
+            f"Penjualan Berisiko Hilang {alt.expected_lost_units:.0f} unit, Risiko Barang Sisa {alt.residual_stock_risk_units:.0f} unit, "
             f"Modal Dibutuhkan Rp{alt.required_capital:,.0f}"
             for alt in packet.decision.alternatives
         )
@@ -163,15 +166,15 @@ Tugas Anda adalah menjelaskan hasil rekomendasi keputusan secara terstruktur, pe
 DATA KEPUTUSAN TERVERIFIKASI:
 - SKU / Produk: {packet.sku_id}
 - Rekomendasi Terpilih: {action_label.upper()}
-- Komitmen sekarang: {rec.commit_now_units} unit
-- Komitmen susulan: {rec.commit_later_units} unit
+- Disiapkan sekarang: {rec.commit_now_units} unit
+- Tambahan menyusul: {rec.commit_later_units} unit
 - Batas waktu evaluasi ulang: pukul {rec.reevaluate_at:%H:%M} WIB
 - Modal kerja yang dibutuhkan: Rp{rec.required_capital:,.0f}
 - Estimasi keuntungan bersih: Rp{rec.expected_contribution:,.0f}
-- Tingkat pemenuhan order (fill rate): {rec.expected_fill_rate * 100:.0f}%
-- Potensi penjualan hilang (lost sales): {rec.expected_lost_units:.0f} unit
+- Permintaan yang terpenuhi: {rec.expected_fill_rate * 100:.0f}%
+- Penjualan berisiko hilang: {rec.expected_lost_units:.0f} unit
 - Risiko barang sisa: {rec.residual_stock_risk_units:.0f} unit
-- Kemungkinan lonjakan demand bertahan 48 jam: {packet.decision.surge_persistence_48h * 100:.0f}%
+- Kemungkinan permintaan tetap ramai 48 jam ke depan: {packet.decision.surge_persistence_48h * 100:.0f}%
 - Tingkat keyakinan sinyal data: {packet.decision.confidence}
 
 ALTERNATIF YANG TELAH DIUJI:
@@ -185,6 +188,7 @@ CATATAN DATA / PERINGATAN:
 
 ATURAN KETAT PENULISAN (COMPLIANCE):
 1. HANYA gunakan angka dan data di atas. DILARANG membuat angka perkiraan atau asumsi biaya baru.
+1b. Tulis untuk pemilik toko, bukan analis. DILARANG memakai istilah teknis seperti "commit", "fill rate", "lost sales", "SKU", "forecast horizon", atau "decision engine" -- pakai padanan sehari-hari (siapkan stok, permintaan terpenuhi, penjualan berisiko hilang, produk, jangka waktu, RamAI).
 2. Tuliskan dengan format yang rapi:
    - Kalimat pembuka rekomendasi yang tegas.
    - Poin "Mengapa Rekomendasi Ini Paling Tepat" (sorot persistensi lonjakan dan perbandingan keuntungan vs risiko barang nyisa).

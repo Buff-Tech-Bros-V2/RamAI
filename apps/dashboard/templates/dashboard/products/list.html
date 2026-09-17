@@ -6,7 +6,7 @@
 
 {% block content %}
 <header class="page-heading">
-    <div><div class="eyebrow">Kelola katalog</div><h1>Produk dan stok</h1><p>Kelola profil produk, biaya, kapasitas, dan batas keputusan setiap SKU.</p></div>
+    <div><div class="eyebrow">Kelola katalog</div><h1>Produk dan stok</h1><p>Kelola profil produk, biaya, kapasitas, dan batas keputusan setiap produk.</p></div>
     {% if user.is_authenticated %}
     <a href="{% url 'dashboard:product_create' %}" class="ram-btn ram-btn-primary">+ Tambah produk</a>
     {% endif %}
@@ -24,7 +24,7 @@
         <div class="product-main"><span>{{ row.product.sku_id }}</span><h3>{{ row.product.name }}</h3><small>{{ row.product.product_category }}</small></div>
         <div class="product-cell"><span>Stok saat ini</span><strong>{% if row.latest %}{{ row.latest.stock_on_hand }} unit{% else %}—{% endif %}</strong></div>
         <div class="product-cell"><span>Mode</span><strong>{{ row.product.decision_config.get_operation_mode_display }}</strong></div>
-        <div class="product-cell"><span>Jendela keputusan</span><strong>{{ row.product.decision_config.decision_window_hours }} jam</strong></div>
+        <div class="product-cell"><span>Batas waktu keputusan</span><strong>{{ row.product.decision_config.decision_window_hours }} jam</strong></div>
         <div class="product-row-actions"><a href="{% url 'dashboard:product_detail' row.product.sku_id %}" class="ram-btn ram-btn-ghost">Detail</a>{% if row.latest %}<a href="{% url 'dashboard:decision_center' row.product.sku_id %}" class="ram-btn ram-btn-outline">Analisis</a>{% endif %}</div>
     </article>
     {% empty %}
