@@ -204,6 +204,12 @@ td,th,.stat-value,.metric-value{font-variant-numeric:tabular-nums}
 .ram-btn-full{width:100%}
 .ram-btn-lg{padding:16px 24px;font-size:14px}
 
+/* ---------- Login ---------- */
+.login-wrapper{display:flex;justify-content:center;padding:60px 0}
+.login-card{background:var(--ram-bg-card);border:1px solid var(--ram-border);border-radius:var(--radius-lg);padding:32px;box-shadow:var(--shadow-sm);width:100%;max-width:380px}
+.login-card .card-title{font-size:18px;font-weight:700;margin-bottom:8px}
+.login-card .card-desc{font-size:12px;color:var(--ram-muted-500);margin-bottom:20px;line-height:1.6}
+
 /* ---------- Assumptions ---------- */
 .assumptions-card{background:var(--ram-bg-card);border:1px solid var(--ram-border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm);margin-bottom:32px}
 .assumptions-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:none;border:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:14px;font-weight:600;color:var(--ram-ink-900);transition:background var(--transition-base)}
@@ -424,10 +430,13 @@ body{overflow-x:hidden}
 .sidebar-foot p{font-size:9px;line-height:1.55;color:#64748b;margin-top:12px}
 .app-main{width:calc(100% - 238px);margin-left:238px;min-width:0;display:flex;flex-direction:column;min-height:100vh}
 .app-topbar{height:70px;display:flex;align-items:center;gap:14px;padding:0 28px;background:rgba(255,255,255,.94);border-bottom:1px solid var(--ram-border);position:sticky;top:0;z-index:180;backdrop-filter:blur(12px)}
-.app-topbar>div:not(.topbar-status){display:flex;flex-direction:column}
+.app-topbar>div:not(.topbar-status):not(.topbar-auth){display:flex;flex-direction:column}
 .topbar-context{font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--ram-muted-400)}
 .app-topbar strong{font-size:13px;color:var(--ram-ink-900)}
-.topbar-status{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:10px;color:var(--ram-muted-500)}
+.topbar-auth{margin-left:auto;display:flex;align-items:center;gap:10px}
+.topbar-auth-user{font-size:12px;font-weight:600;color:var(--ram-ink-700)}
+.topbar-auth .ram-btn-ghost{padding:8px 14px;font-size:11px}
+.topbar-status{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--ram-muted-500)}
 .topbar-status span{width:7px;height:7px;border-radius:50%;background:var(--ram-green-500);box-shadow:0 0 0 4px rgba(34,197,94,.1)}
 .sidebar-toggle{display:none;width:36px;height:36px;border:1px solid var(--ram-border);border-radius:9px;background:#fff;color:var(--ram-ink-900);cursor:pointer}
 .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:250}

@@ -35,7 +35,7 @@
 <div class="app-shell">
     <aside class="app-sidebar" id="app-sidebar">
         <a class="sidebar-brand" href="{% url 'dashboard:index' %}" aria-label="Beranda RamAI">
-            <span class="sidebar-logo">R</span>
+            <img src="https://i.imgur.com/kaavgrz.jpeg" alt="Logo RamAI" class="sidebar-logo">
             <span><strong>Ram<span>AI</span></strong><small>Inventory copilot</small></span>
         </a>
 
@@ -67,6 +67,17 @@
             <div>
                 <span class="topbar-context">BuffTechBros</span>
                 <strong>{% block page_title %}RamAI Workspace{% endblock %}</strong>
+            </div>
+            <div class="topbar-auth">
+                {% if user.is_authenticated %}
+                <span class="topbar-auth-user">{{ user.username }}</span>
+                <form method="post" action="{% url 'logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="ram-btn ram-btn-ghost">Logout</button>
+                </form>
+                {% else %}
+                <a href="{% url 'login' %}?next={{ request.path }}" class="ram-btn ram-btn-ghost">Login</a>
+                {% endif %}
             </div>
             <div class="topbar-status"><span></span> Sistem siap</div>
         </header>

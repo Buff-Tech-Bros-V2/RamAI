@@ -1,6 +1,7 @@
 import json
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -130,6 +131,7 @@ def product_detail(request, sku_id):
     )
 
 
+@login_required
 def product_create(request):
     sku_form = SKUForm(request.POST or None)
     config_form = DecisionConfigForm(request.POST or None)
@@ -154,6 +156,7 @@ def product_create(request):
     )
 
 
+@login_required
 def product_edit(request, sku_id):
     product = get_object_or_404(SKU.objects.select_related("decision_config"), pk=sku_id)
     sku_form = SKUForm(request.POST or None, instance=product)
@@ -235,6 +238,7 @@ def _parse_overrides(request) -> dict:
     return overrides
 
 
+@login_required
 def approve_plan(request, sku_id):
     if request.method != "POST":
         return redirect("dashboard:decision_center", sku_id=sku_id)
@@ -248,6 +252,7 @@ def approve_plan(request, sku_id):
 
     ActionPlanDraft.objects.create(
         sku=sku,
+        approved_by=request.user,
         recommended_action=rec.action,
         commit_now_units=rec.commit_now_units,
         commit_later_units=rec.commit_later_units,
