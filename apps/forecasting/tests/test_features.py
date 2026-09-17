@@ -120,6 +120,22 @@ def test_runs_with_all_content_null_and_flags_it():
     assert feats["content_view_velocity"].isna().all()
 
 
+def test_content_columns_absent_entirely_from_source_frame():
+    """A transaction-only feed has no content columns at all, not even null ones."""
+    obs = make_obs(n_hours=60, skus=("SKU-001",)).drop(columns=F.CONTENT_COLUMNS)
+    feats = F.build_features(obs, feature_mode=F.MODE_CONTENT)
+    assert len(feats) == len(obs)
+    assert (feats["content_features_used"] == 0).all()
+    assert feats["content_view_velocity"].isna().all()
+    assert list(feats.columns)[2:] == F.feature_columns(F.MODE_CONTENT)
+
+
+def test_transaction_mode_works_when_content_columns_absent():
+    obs = make_obs(n_hours=60, skus=("SKU-001",)).drop(columns=F.CONTENT_COLUMNS)
+    feats = F.build_features(obs, feature_mode=F.MODE_TRANSACTION)
+    assert (feats["content_features_used"] == 0).all()
+
+
 def test_content_available_rows_are_flagged_used():
     obs = make_obs(content=True)
     feats = F.build_features(obs, feature_mode=F.MODE_CONTENT)
