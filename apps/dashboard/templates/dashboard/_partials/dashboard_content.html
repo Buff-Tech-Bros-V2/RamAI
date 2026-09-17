@@ -240,6 +240,7 @@
 
         <hr class="ram-divider" style="margin: var(--space-4) 0;">
 
+        {% if user.is_authenticated %}
         <form method="post" action="{% url 'dashboard:approve_plan' sku.sku_id %}">
             {% csrf_token %}
             <button type="submit" class="ram-btn ram-btn-primary ram-btn-full ram-btn-lg">
@@ -249,6 +250,14 @@
         <div style="font-size: 11px; color: var(--ram-muted-500); margin-top: var(--space-2); text-align: center;">
             Ini cuma nyimpen catatan persetujuan — belum benar-benar belanja/produksi otomatis.
         </div>
+        {% else %}
+        <a href="{% url 'login' %}?next={% url 'dashboard:sku_detail' sku.sku_id %}" class="ram-btn ram-btn-primary ram-btn-full ram-btn-lg">
+            Login untuk Menyetujui Rencana
+        </a>
+        <div style="font-size: 11px; color: var(--ram-muted-500); margin-top: var(--space-2); text-align: center;">
+            Kamu bisa lihat & coba what-if sebagai tamu, tapi approve butuh login.
+        </div>
+        {% endif %}
     </div>
 </div>
 

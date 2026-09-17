@@ -72,6 +72,10 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = []
 
+LOGIN_URL = "login"
+LOGIN_REDIRECT_URL = "dashboard:summary"
+LOGOUT_REDIRECT_URL = "dashboard:summary"
+
 LANGUAGE_CODE = "id"
 
 TIME_ZONE = "Asia/Jakarta"

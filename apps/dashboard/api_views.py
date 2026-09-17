@@ -2,7 +2,7 @@
 Lightweight API / HTMX-partial views for the RamAI dashboard.
 
 These views re-use the same Agent pipeline as the main index view
-(apps.dashboard.views.index). They exist only to serve:
+(apps.dashboard.views.sku_detail). They exist only to serve:
 
 1. JSON data for Chart.js (chart-data endpoint)
 2. HTMX partial HTML swaps (dashboard-content, whatif)

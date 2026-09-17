@@ -7,7 +7,11 @@
 <div class="sku-hero">
     <div class="sku-hero-left">
         <h1>Dashboard Keputusan</h1>
-        <div class="sku-hero-meta">Pilih produk untuk melihat forecast dan rekomendasi</div>
+        <div class="sku-hero-meta">
+            <a href="{% url 'dashboard:summary' %}">← Ringkasan semua SKU</a>
+            <span>·</span>
+            <a href="{% url 'dashboard:sku_history' sku.sku_id %}">Riwayat keputusan →</a>
+        </div>
     </div>
     <div class="sku-select-wrapper">
         <select id="sku-select" class="sku-select" name="sku"
@@ -33,21 +37,11 @@
 
 <!-- Swappable content -->
 <div id="dashboard-content">
-{% if no_data %}
-    <div class="empty-state">
-        <div class="empty-state-icon">📦</div>
-        <h3>Belum ada data SKU</h3>
-        <p>Jalankan <code>python manage.py seed_dummy_data</code> lalu refresh halaman ini.</p>
-    </div>
-{% else %}
     {% include "dashboard/_partials/dashboard_content.html" %}
-{% endif %}
 </div>
 
 {% endblock %}
 
 {% block extra_js %}
-{% if not no_data %}
 <script src="{% static 'dashboard/js/charts.js' %}"></script>
-{% endif %}
 {% endblock %}

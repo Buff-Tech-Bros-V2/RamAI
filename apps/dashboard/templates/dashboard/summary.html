@@ -1,0 +1,111 @@
+{% extends "dashboard/base.html" %}
+{% load humanize %}
+
+{% block title %}RamAI — Ringkasan Semua SKU{% endblock %}
+
+{% block content %}
+
+<div class="sku-hero">
+    <div class="sku-hero-left">
+        <h1>Ringkasan Semua SKU</h1>
+        <div class="sku-hero-meta">Prioritaskan SKU mana yang butuh keputusan duluan</div>
+    </div>
+</div>
+
+{% if no_data %}
+<div class="empty-state animate-in">
+    <div class="empty-state-icon">📦</div>
+    <h3>Belum ada data SKU</h3>
+    <p>Jalankan <code>python manage.py seed_dummy_data</code> lalu refresh halaman ini.</p>
+</div>
+{% else %}
+
+<!-- ===== Alert Banner ===== -->
+{% for a in alerts %}
+<div class="ram-alert {% if a.status == 'DEADLINE_DEKAT' %}ram-alert-danger{% else %}ram-alert-warning{% endif %} animate-in">
+    <span class="ram-alert-icon">{% if a.status == 'DEADLINE_DEKAT' %}⏰{% else %}⚠{% endif %}</span>
+    <span>
+        <a href="{% url 'dashboard:sku_detail' a.sku.sku_id %}"><strong>{{ a.sku.sku_id }}</strong> — {{ a.sku.name }}</a>
+        {% if a.status == 'DEADLINE_DEKAT' %}
+            mendekati batas waktu keputusan ({{ a.hours_to_deadline|floatformat:1 }} jam lagi).
+        {% else %}
+            butuh perhatian — keyakinan {{ a.confidence|lower }}, kemungkinan rame lanjut {% widthratio a.surge_persistence_48h 1 100 %}%.
+        {% endif %}
+    </span>
+</div>
+{% endfor %}
+
+<!-- ===== Filter Bar ===== -->
+<form method="get" class="summary-filter-bar animate-in">
+    <input type="text" name="q" class="ram-input" placeholder="Cari SKU id atau nama..." value="{{ q }}">
+
+    <select name="category" class="ram-input">
+        <option value="">Semua Kategori</option>
+        {% for c in categories %}
+        <option value="{{ c }}" {% if c == category %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+    </select>
+
+    <select name="status" class="ram-input">
+        <option value="">Semua Status</option>
+        <option value="AMAN" {% if status_filter == "AMAN" %}selected{% endif %}>Aman</option>
+        <option value="PERLU_PERHATIAN" {% if status_filter == "PERLU_PERHATIAN" %}selected{% endif %}>Perlu Perhatian</option>
+        <option value="DEADLINE_DEKAT" {% if status_filter == "DEADLINE_DEKAT" %}selected{% endif %}>Deadline Dekat</option>
+    </select>
+
+    <select name="confidence" class="ram-input">
+        <option value="">Semua Keyakinan</option>
+        <option value="HIGH" {% if confidence_filter == "HIGH" %}selected{% endif %}>High</option>
+        <option value="MEDIUM" {% if confidence_filter == "MEDIUM" %}selected{% endif %}>Medium</option>
+        <option value="LOW" {% if confidence_filter == "LOW" %}selected{% endif %}>Low</option>
+    </select>
+
+    <button type="submit" class="ram-btn ram-btn-outline">Filter</button>
+    <a href="{% url 'dashboard:summary' %}" class="ram-btn ram-btn-outline">Reset</a>
+</form>
+
+<!-- ===== SKU Grid ===== -->
+<div class="ram-table-wrapper animate-in">
+    <table class="ram-table">
+        <thead>
+            <tr>
+                <th>SKU</th>
+                <th>Kategori</th>
+                <th>Status</th>
+                <th>Keyakinan</th>
+                <th class="text-end">Stok</th>
+                <th>Rekomendasi</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td><strong>{{ row.sku.sku_id }}</strong><br><span style="color:var(--ram-muted-500);font-size:12px;">{{ row.sku.name }}</span></td>
+                <td>{{ row.sku.product_category }}</td>
+                <td>
+                    <span class="status-badge status-{{ row.status|lower }}">
+                        {% if row.status == "AMAN" %}Aman
+                        {% elif row.status == "PERLU_PERHATIAN" %}Perlu Perhatian
+                        {% else %}Deadline Dekat{% endif %}
+                    </span>
+                </td>
+                <td>
+                    <span class="confidence-badge confidence-{{ row.confidence|lower }}">{{ row.confidence }}</span>
+                </td>
+                <td class="text-end">{{ row.current_stock }} unit</td>
+                <td>{{ row.recommended_action }}</td>
+                <td class="text-end"><a href="{% url 'dashboard:sku_detail' row.sku.sku_id %}">Lihat Detail →</a></td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" style="text-align:center;color:var(--ram-muted-500);padding:24px;">Tidak ada SKU yang cocok dengan filter.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endif %}
+
+{% endblock %}

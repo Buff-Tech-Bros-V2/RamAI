@@ -15,10 +15,14 @@ from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from apps.skus.models import SKU, ConstraintProfile, DecisionConfig, HourlyObservation, OperationMode
+
+DEMO_USERNAME = "admin"
+DEMO_PASSWORD = "demo1234"
 
 N_DAYS = 90
 SEED = 42
@@ -123,6 +127,8 @@ class Command(BaseCommand):
         rng = random.Random(SEED)
         data_dir = Path(options["data_dir"])
 
+        self._seed_demo_user()
+
         if options["flush"]:
             HourlyObservation.objects.all().delete()
             DecisionConfig.objects.all().delete()
@@ -176,6 +182,21 @@ class Command(BaseCommand):
             self.stdout.write(f"Seeded {sku.sku_id} ({scenario['demo_scenario']}).")
 
         self.stdout.write(self.style.SUCCESS("Dummy data seeding complete."))
+
+    def _seed_demo_user(self):
+        User = get_user_model()
+        user, created = User.objects.get_or_create(
+            username=DEMO_USERNAME,
+            defaults={"is_staff": True, "is_superuser": True},
+        )
+        if created:
+            user.set_password(DEMO_PASSWORD)
+            user.save()
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"Created demo login user: {DEMO_USERNAME} / {DEMO_PASSWORD}"
+                )
+            )
 
     def _seed_from_simulator(self, data_dir: Path):
         sku_master = pd.read_csv(data_dir / "sku_master.csv")

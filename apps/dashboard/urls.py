@@ -5,8 +5,10 @@ from . import api_views, views
 app_name = "dashboard"
 
 urlpatterns = [
-    path("", views.index, name="index"),
-    path("<str:sku_id>/approve/", views.approve_plan, name="approve_plan"),
+    path("", views.summary, name="summary"),
+    path("sku/<str:sku_id>/", views.sku_detail, name="sku_detail"),
+    path("sku/<str:sku_id>/history/", views.sku_history, name="sku_history"),
+    path("sku/<str:sku_id>/approve/", views.approve_plan, name="approve_plan"),
     # HTMX partials & API
     path("api/chart-data/", api_views.chart_data, name="chart_data"),
     path("partials/dashboard/", api_views.dashboard_partial, name="dashboard_partial"),

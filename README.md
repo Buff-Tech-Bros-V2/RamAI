@@ -14,7 +14,12 @@ python manage.py seed_dummy_data   # generates 4 dummy SKUs + 90 days hourly his
 python manage.py runserver
 ```
 
-Open http://127.0.0.1:8000/ and pick a SKU.
+Open http://127.0.0.1:8000/ — ringkasan semua SKU jadi halaman utama, klik salah satu untuk lihat dashboard detailnya.
+
+Browsing dashboard, what-if, dan riwayat keputusan tidak butuh login. Login hanya dibutuhkan untuk approve rencana (`Setuju, Catat Sebagai Rencana`). `seed_dummy_data` otomatis membuat user demo:
+
+- **Username:** `admin`
+- **Password:** `demo1234`
 
 ## Module map
 

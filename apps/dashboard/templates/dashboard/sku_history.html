@@ -1,0 +1,100 @@
+{% extends "dashboard/base.html" %}
+{% load humanize %}
+
+{% block title %}RamAI — Riwayat {{ sku.sku_id }}{% endblock %}
+
+{% block content %}
+
+<div class="sku-hero">
+    <div class="sku-hero-left">
+        <h1>Riwayat Keputusan — {{ sku.sku_id }}</h1>
+        <div class="sku-hero-meta">
+            <a href="{% url 'dashboard:sku_detail' sku.sku_id %}">← Kembali ke Dashboard</a>
+        </div>
+    </div>
+</div>
+
+{% if drafts %}
+<div class="history-list animate-in">
+    {% for d in drafts %}
+    <div class="assumptions-card" style="margin-bottom: var(--space-4);">
+        <button class="assumptions-toggle" data-toggle-collapse="history-{{ d.id }}" aria-expanded="false">
+            <span>
+                <strong>{{ d.approved_at|date:"d M Y H:i" }}</strong>
+                — {{ d.recommended_action }}
+                · disetujui oleh <strong>{{ d.approved_by.username|default:"—" }}</strong>
+            </span>
+            <span class="toggle-icon">▼</span>
+        </button>
+        <div class="collapsible-body" id="history-{{ d.id }}">
+            <div class="assumptions-body">
+                <div class="ram-table-wrapper" style="margin-bottom: var(--space-4); box-shadow:none; border:none;">
+                    <table class="ram-table">
+                        <tbody>
+                            <tr>
+                                <td>Unit sekarang</td>
+                                <td class="text-end"><strong>{{ d.commit_now_units }} unit</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Unit susulan</td>
+                                <td class="text-end"><strong>{{ d.commit_later_units }} unit</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Modal yang dikeluarkan</td>
+                                <td class="text-end"><strong>Rp{{ d.required_capital|floatformat:0|intcomma }}</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Estimasi untung bersih</td>
+                                <td class="text-end"><strong>Rp{{ d.expected_contribution|floatformat:0|intcomma }}</strong></td>
+                            </tr>
+                            {% if d.decision_snapshot.confidence %}
+                            <tr>
+                                <td>Keyakinan saat itu</td>
+                                <td class="text-end">
+                                    <span class="confidence-badge confidence-{{ d.decision_snapshot.confidence|lower }}">
+                                        {{ d.decision_snapshot.confidence }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% if d.decision_snapshot.surge_persistence_48h != None %}
+                            <tr>
+                                <td>Kemungkinan rame lanjut 48j</td>
+                                <td class="text-end">{% widthratio d.decision_snapshot.surge_persistence_48h 1 100 %}%</td>
+                            </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if d.decision_snapshot.decision.assumptions %}
+                <div style="font-size:12px;color:var(--ram-muted-500);margin-bottom:8px;">Asumsi saat itu:</div>
+                <ul class="assumptions-list">
+                    {% for a in d.decision_snapshot.decision.assumptions %}
+                    <li>{{ a }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if d.decision_snapshot.warnings %}
+                <div style="font-size:12px;color:var(--ram-muted-500);margin:8px 0;">Peringatan saat itu:</div>
+                <ul class="assumptions-list">
+                    {% for w in d.decision_snapshot.warnings %}
+                    <li class="data-quality-item">{{ w }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state animate-in">
+    <div class="empty-state-icon">📝</div>
+    <h3>Belum ada draf rencana untuk SKU ini</h3>
+    <p>Setujui rekomendasi di halaman dashboard untuk mulai mencatat riwayat.</p>
+</div>
+{% endif %}
+
+{% endblock %}

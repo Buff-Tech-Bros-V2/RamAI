@@ -1,0 +1,33 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}RamAI — Login{% endblock %}
+
+{% block content %}
+<div class="login-wrapper animate-in">
+    <div class="login-card">
+        <div class="card-title">Login</div>
+        <div class="card-desc">Login dibutuhkan untuk menyetujui rencana keputusan. Melihat dashboard & what-if tetap bisa tanpa login.</div>
+
+        {% if form.errors %}
+        <div class="ram-alert ram-alert-warning">
+            <span class="ram-alert-icon">⚠</span>
+            <span>Username atau password salah.</span>
+        </div>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="ram-form-group">
+                <label class="ram-label" for="id_username">Username</label>
+                <input type="text" name="username" id="id_username" class="ram-input" autofocus required>
+            </div>
+            <div class="ram-form-group">
+                <label class="ram-label" for="id_password">Password</label>
+                <input type="password" name="password" id="id_password" class="ram-input" required>
+            </div>
+            <input type="hidden" name="next" value="{{ next }}">
+            <button type="submit" class="ram-btn ram-btn-primary ram-btn-full ram-btn-lg">Login</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
