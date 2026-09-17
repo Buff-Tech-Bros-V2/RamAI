@@ -45,7 +45,8 @@ HOUR_PROFILE = np.array(
 )
 
 MIN_HISTORY_HOURS = 24 * 8          # need a week of lags before features are meaningful
-DEFAULT_ARTIFACT_ROOT = Path("artifacts")
+ROOT_DIR = Path(__file__).resolve().parents[2]
+DEFAULT_ARTIFACT_ROOT = ROOT_DIR / "artifacts"
 SCENARIO_SEED = 42
 
 
