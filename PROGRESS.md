@@ -1,4 +1,4 @@
-# VIRALCAST — ML / forecasting track progress
+# RamAI — ML / forecasting track progress
 
 Handoff note for the next session. Branch `feat/ml-model`, 15 commits ahead of `main`.
 

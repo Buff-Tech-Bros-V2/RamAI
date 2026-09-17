@@ -1,4 +1,4 @@
-"""VIRALCAST synthetic data generator (MVP, hackathon scope).
+"""RamAI synthetic data generator (MVP, hackathon scope).
 
 Implements PRD sections 9.1 / 9.2 / 10.2 and requirements FR-D01..FR-D07.
 
@@ -656,7 +656,7 @@ def summarise(result: dict, out: Path) -> None:
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Generate VIRALCAST synthetic training/test data.")
+    p = argparse.ArgumentParser(description="Generate RamAI synthetic training/test data.")
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--days", type=int, default=90)
     p.add_argument("--out", default="data")

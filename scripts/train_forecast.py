@@ -1,4 +1,4 @@
-"""Train and evaluate the VIRALCAST forecast models (PRD 16.3 experiment matrix).
+"""Train and evaluate the RamAI forecast models (PRD 16.3 experiment matrix).
 
 Trains the seasonal-naive baseline, the transaction-only quantile model and the
 transaction-plus-content quantile model on identical rows, then scores all three
@@ -61,7 +61,7 @@ def evaluate_model(bundle, obs, labels, horizon, feature_mode):
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Train VIRALCAST forecast models.")
+    p = argparse.ArgumentParser(description="Train RamAI forecast models.")
     p.add_argument("--data", default="data")
     p.add_argument("--artifacts", default="artifacts")
     p.add_argument("--horizon-report", type=int, default=48,

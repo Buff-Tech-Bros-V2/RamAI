@@ -118,7 +118,7 @@ def main() -> None:
     args = ap.parse_args()
 
     rows = []
-    workdir = Path(tempfile.mkdtemp(prefix="viralcast_seeds_"))
+    workdir = Path(tempfile.mkdtemp(prefix="ramai_seeds_"))
     try:
         for seed in args.seeds:
             data = workdir / f"seed_{seed}"

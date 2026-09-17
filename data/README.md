@@ -1,4 +1,4 @@
-# VIRALCAST synthetic dataset — Synthetic Demo Data
+# RamAI synthetic dataset — Synthetic Demo Data
 
 Regenerate with:
 

@@ -1,4 +1,4 @@
-"""Feature pipeline for the VIRALCAST quantile forecast (PRD 10.3).
+"""Feature pipeline for the RamAI quantile forecast (PRD 10.3).
 
 Design rules that the tests pin down:
 

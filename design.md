@@ -4,13 +4,9 @@ Dokumen ini menyatukan aturan visual untuk dua deliverable hackathon: poster A4 
 
 ## 0. Catatan penting: penamaan
 
-Kode (`README.md`, `config/settings.py`, navbar di `base.html`) masih memakai nama **VIRALCAST**, sedangkan PRD (`RamAI_PRD.md`) dan seluruh materi branding memakai **RamAI**. Sebelum poster dicetak, putuskan satu nama dan samakan di:
+Nama produk sudah diseragamkan menjadi **RamAI** di seluruh kode, dokumen, skrip, dan prompt LLM — sesuai PRD (`RamAI_PRD.md`) dan materi branding. Nama lama **VIRALCAST** tidak dipakai lagi di mana pun.
 
-- `apps/dashboard/templates/dashboard/base.html` (`<title>`, navbar-brand)
-- `README.md`
-- Poster dan seluruh materi presentasi
-
-Rekomendasi: pakai **RamAI**, karena itu yang sudah dipakai di PRD dan poster.
+Kalau menambah materi baru (poster, slide, README modul), pakai **RamAI** saja.
 
 ## 1. Brand identity
 

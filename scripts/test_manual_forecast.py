@@ -1,4 +1,4 @@
-"""Manual forecast testing tool for VIRALCAST.
+"""Manual forecast testing tool for RamAI.
 
 Allows quick manual testing of trained forecast bundles with custom SKUs,
 cutoffs, or comparison between calm and viral surge periods.
@@ -87,7 +87,7 @@ def print_forecast_table(df: pd.DataFrame, title: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Manually test VIRALCAST forecast models.")
+    parser = argparse.ArgumentParser(description="Manually test RamAI forecast models.")
     parser.add_argument("--sku", default="SKU-001", help="SKU ID to forecast (e.g. SKU-001)")
     parser.add_argument("--cutoff", default=None, help="Forecast cutoff timestamp (e.g. '2026-09-14 12:00')")
     parser.add_argument("--data", default="data", help="Data directory")
@@ -118,7 +118,7 @@ def main() -> None:
         surge_ts = pd.to_datetime("2026-09-14 12:00:00").tz_localize(tz)
 
         print("\n" + "=" * 75)
-        print("VIRALCAST MANUAL TEST: CALM vs SURGE DEMO COMPARISON")
+        print("RamAI MANUAL TEST: CALM vs SURGE DEMO COMPARISON")
         print("=" * 75)
 
         df_calm = run_single_forecast(bundle_content, obs, args.sku, calm_ts, base_series)
@@ -142,7 +142,7 @@ def main() -> None:
         cutoff = obs["timestamp"].max()
 
     print("\n" + "=" * 75)
-    print(f"VIRALCAST MANUAL FORECAST: {args.sku} at {cutoff}")
+    print(f"RamAI MANUAL FORECAST: {args.sku} at {cutoff}")
     print("=" * 75)
 
     df_content = run_single_forecast(bundle_content, obs, args.sku, cutoff, base_series)
