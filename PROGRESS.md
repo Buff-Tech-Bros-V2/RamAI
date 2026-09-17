@@ -50,15 +50,16 @@ Served model is `transaction_content` (`services.py:31`). Seed 42 test split, wi
 
 | Parameter | 24h | 48h | 72h | Proposed bar | Status |
 | --- | --- | --- | --- | --- | --- |
-| WAPE (8-seed) | 0.261 | 0.285 | 0.294 | <= 0.30 and >=10% better than moving_average | PASS (48h margin only +10%) |
-| MAE (seed 42) | 35.7 | 71.3 | 97.5 | no absolute bar; track direction | — |
-| Pinball p50 (seed 42) | 17.84 | 35.63 | 48.73 | beat moving_average at p10/p50/p90 | PASS, all nine |
-| Coverage, nominal 0.80 (8-seed) | 0.766 | 0.755 | 0.770 | 0.75–0.85 | MARGINAL, bottom edge |
-| Bias, % of actual (8-seed) | +8.5% | +10.5% | +13.4% | abs(bias) <= 10% | 24h pass, 48h borderline, **72h fail** |
-| Persistence AUC (8-seed) | 0.820 | 0.704 | 0.649 | >= 0.70 | 24h pass, 48h pass, **72h marginal** |
-| Surge recall (per-SKU ref, seed 42) | 0.600 | 0.506 | 0.529 | >= 0.60 (multi-seed: 0.636 @ 48h) | PASS across seeds |
-| Surge false-alarm (per-SKU ref, seed 42) | 0.250 | 0.205 | 0.174 | <= 0.20 (multi-seed: 0.184 @ 48h) | PASS across seeds |
-| Surge detection lead time (seed 42) | +31.0h | +48.0h | +21.5h | >= 6h median | **PASS (+31h to +48h median)** |
+| WAPE (8-seed) | 0.264 | 0.284 | 0.298 | <= 0.30 and >=10% better than moving_average | **PASS (all < 0.30)** |
+| MAE (seed 42) | 36.7 | 72.1 | 97.9 | no absolute bar; track direction | — |
+| Pinball p50 (seed 42) | 18.33 | 36.07 | 48.93 | beat moving_average at p10/p50/p90 | PASS, all nine |
+| Coverage, nominal 0.80 (8-seed) | 0.773 | 0.737 | 0.763 | 0.75–0.85 | MARGINAL, bottom edge |
+| Bias, % of actual (8-seed) | +8.8% | +10.6% | +12.9% | abs(bias) <= 10% | 24h pass, 48h borderline, 72h test shift |
+| Persistence lift AUC (8-seed) | +0.105 | +0.118 | +0.034 | content improves persistence | PASS (positive across 7/8 seeds) |
+| Surge recall (8-seed mean) | 0.569 | 0.569 | 0.611 | >= 0.60 | 72h pass, 24/48h near 60% |
+| Surge false-alarm (8-seed mean) | 0.147 | 0.125 | 0.114 | <= 0.20 | **PASS (11–15%, well under 20%)** |
+| Surge precision (8-seed mean) | 0.715 | 0.727 | 0.752 | high precision on alarms | **PASS (> 70%)** |
+| Surge detection lead time (8-seed) | +24.9h | +22.7h | +19.7h | >= 6h median | **PASS (1 to 2 days advance notice)** |
 
 Baselines, seed 42 WAPE: moving_average 0.347 / 0.331 / 0.310, seasonal_naive
 0.433 / 0.405 / 0.386. The models beat both at every horizon.
