@@ -31,7 +31,9 @@ Everything is reproducible from `--seed`. Same seed → byte-identical files.
 
 `target_censored_{H}h(t) = 1` when any hour in that window had `stockout_flag = 1`.
 **Drop or downweight those rows when training** — otherwise the model learns
-"empty shelf ⇒ zero demand". Roughly 70–82% of labels are uncensored.
+"empty shelf ⇒ zero demand". Roughly 54–67% of labels are uncensored (24h: 66.6%,
+48h: 57.9%, 72h: 54.1%), which leaves only 451–864 usable test rows per horizon.
+Raising that share is the single highest-value improvement left in the dataset.
 
 The last H hours of each series have a null target by construction.
 
