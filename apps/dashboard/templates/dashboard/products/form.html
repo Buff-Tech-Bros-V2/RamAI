@@ -1,0 +1,27 @@
+{% extends "dashboard/base.html" %}
+
+{% block title %}{{ form_title }} — RamAI{% endblock %}
+{% block page_title %}{{ form_title }}{% endblock %}
+
+{% block content %}
+<header class="page-heading form-page-heading">
+    <div><a href="{% if product %}{% url 'dashboard:product_detail' product.sku_id %}{% else %}{% url 'dashboard:product_list' %}{% endif %}" class="back-link">← Kembali</a><div class="eyebrow">Kelola produk</div><h1>{{ form_title }}</h1><p>{{ form_intro }}</p></div>
+</header>
+
+<form method="post" class="product-form">
+    {% csrf_token %}
+    {% if sku_form.non_field_errors or config_form.non_field_errors %}<div class="ram-alert ram-alert-warning"><span class="ram-alert-icon">!</span><span>{{ sku_form.non_field_errors }}{{ config_form.non_field_errors }}</span></div>{% endif %}
+
+    <section class="form-card">
+        <div class="form-card-heading"><span>01</span><div><h2>Identitas produk</h2><p>Informasi dasar yang digunakan di seluruh workspace.</p></div></div>
+        <div class="form-fields two-columns">{% for field in sku_form %}<div class="field-wrap {% if field.name == 'demo_scenario' %}full-width{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<em>*</em>{% endif %}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% endfor %}</div>
+    </section>
+
+    <section class="form-card">
+        <div class="form-card-heading"><span>02</span><div><h2>Aturan keputusan</h2><p>Biaya, kapasitas, dan tenggat yang membatasi rekomendasi RamAI.</p></div></div>
+        <div class="form-fields three-columns">{% for field in config_form %}<div class="field-wrap"><label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<em>*</em>{% endif %}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<span class="field-error">{{ error }}</span>{% endfor %}</div>{% endfor %}</div>
+    </section>
+
+    <div class="form-actions"><a href="{% if product %}{% url 'dashboard:product_detail' product.sku_id %}{% else %}{% url 'dashboard:product_list' %}{% endif %}" class="ram-btn ram-btn-ghost">Batal</a><button type="submit" class="ram-btn ram-btn-primary">Simpan produk</button></div>
+</form>
+{% endblock %}

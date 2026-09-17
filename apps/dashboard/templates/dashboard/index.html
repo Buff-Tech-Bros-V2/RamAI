@@ -3,35 +3,26 @@
 
 {% block content %}
 
-<!-- SKU Selector -->
-<div class="sku-hero">
-    <div class="sku-hero-left">
-        <h1>Dashboard Keputusan</h1>
-        <div class="sku-hero-meta">Pilih produk untuk melihat forecast dan rekomendasi</div>
+<header class="workspace-header">
+    <div>
+        <div class="eyebrow">Pusat keputusan hari ini</div>
+        <h1>Ambil keputusan stok dengan lebih yakin.</h1>
+        <p>Pilih produk, pahami risikonya, lalu simpan rencana yang paling masuk akal.</p>
     </div>
-    <div class="sku-select-wrapper">
-        <select id="sku-select" class="sku-select" name="sku"
-                hx-get="{% url 'dashboard:dashboard_partial' %}"
-                hx-target="#dashboard-content"
-                hx-swap="innerHTML"
-                hx-trigger="change"
-                hx-indicator="#loading-spinner">
-            {% for s in skus %}
-            <option value="{{ s.sku_id }}" {% if s.sku_id == selected_sku_id %}selected{% endif %}>
-                {{ s.sku_id }} — {{ s.name }}
-            </option>
-            {% endfor %}
-        </select>
-    </div>
-</div>
+    <form method="get" class="product-switcher">
+        <label for="sku-select">Produk yang dianalisis</label>
+        <div class="sku-select-wrapper">
+            <select id="sku-select" class="sku-select" name="sku" onchange="this.form.submit()">
+                {% for s in skus %}
+                <option value="{{ s.sku_id }}" {% if s.sku_id == selected_sku_id %}selected{% endif %}>
+                    {{ s.sku_id }} — {{ s.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+</header>
 
-<!-- Loading -->
-<div id="loading-spinner" class="htmx-indicator" style="text-align:center;padding:40px 0;">
-    <div class="loading-spinner" style="margin:0 auto;"></div>
-    <div style="margin-top:12px;color:var(--ram-muted-500);font-size:13px;">Menghitung ulang...</div>
-</div>
-
-<!-- Swappable content -->
 <div id="dashboard-content">
 {% if no_data %}
     <div class="empty-state">

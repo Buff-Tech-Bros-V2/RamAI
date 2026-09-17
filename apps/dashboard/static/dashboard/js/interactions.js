@@ -56,10 +56,39 @@
     });
   }
 
+  function initSidebar() {
+    var toggle = document.getElementById('sidebar-toggle');
+    var sidebar = document.getElementById('app-sidebar');
+    var backdrop = document.getElementById('sidebar-backdrop');
+    if (!toggle || !sidebar || !backdrop) return;
+    function setOpen(open) {
+      sidebar.classList.toggle('open', open);
+      backdrop.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+    }
+    toggle.addEventListener('click', function () {
+      setOpen(!sidebar.classList.contains('open'));
+    });
+    backdrop.addEventListener('click', function () { setOpen(false); });
+  }
+
+  function initProductSearch() {
+    var search = document.getElementById('product-search');
+    if (!search) return;
+    search.addEventListener('input', function () {
+      var query = this.value.trim().toLowerCase();
+      document.querySelectorAll('#product-list .product-row').forEach(function (row) {
+        row.hidden = query && row.dataset.search.indexOf(query) === -1;
+      });
+    });
+  }
+
   function init() {
     initDeadlineCountdown();
     initCollapsible();
     initHTMX();
+    initSidebar();
+    initProductSearch();
   }
 
   if (document.readyState === 'loading') {

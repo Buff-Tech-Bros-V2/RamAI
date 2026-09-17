@@ -30,7 +30,7 @@
   }
 
   function initDemandChart() {
-    var raw = getJsonData('demand-chart-data');
+    var raw = getJsonData('dashboard-chart-data');
     if (!raw) return;
     var data = raw.demand || raw;
     var ctx = document.getElementById('demandChart');
@@ -79,7 +79,7 @@
   }
 
   function initForecastChart() {
-    var raw = getJsonData('forecast-chart-data') || getJsonData('demand-chart-data');
+    var raw = getJsonData('dashboard-chart-data');
     if (!raw) return;
     var data = raw.forecast || raw;
     var ctx = document.getElementById('forecastChart');

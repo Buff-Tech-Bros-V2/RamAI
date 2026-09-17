@@ -1,0 +1,32 @@
+{% extends "dashboard/base.html" %}
+{% load humanize %}
+
+{% block title %}Produk — RamAI{% endblock %}
+{% block page_title %}Produk{% endblock %}
+
+{% block content %}
+<header class="page-heading">
+    <div><div class="eyebrow">Kelola katalog</div><h1>Produk dan stok</h1><p>Kelola profil produk, biaya, kapasitas, dan batas keputusan setiap SKU.</p></div>
+    <a href="{% url 'dashboard:product_create' %}" class="ram-btn ram-btn-primary">+ Tambah produk</a>
+</header>
+
+<div class="toolbar-card">
+    <div class="search-field"><span>⌕</span><input type="search" id="product-search" placeholder="Cari kode SKU atau nama produk..." aria-label="Cari produk"></div>
+    <span>{{ product_rows|length }} produk</span>
+</div>
+
+<div class="product-list" id="product-list">
+    {% for row in product_rows %}
+    <article class="product-row" data-search="{{ row.product.sku_id|lower }} {{ row.product.name|lower }} {{ row.product.product_category|lower }}">
+        <div class="product-avatar">{{ row.product.name|slice:":1"|upper }}</div>
+        <div class="product-main"><span>{{ row.product.sku_id }}</span><h3>{{ row.product.name }}</h3><small>{{ row.product.product_category }}</small></div>
+        <div class="product-cell"><span>Stok saat ini</span><strong>{% if row.latest %}{{ row.latest.stock_on_hand }} unit{% else %}—{% endif %}</strong></div>
+        <div class="product-cell"><span>Mode</span><strong>{{ row.product.decision_config.get_operation_mode_display }}</strong></div>
+        <div class="product-cell"><span>Deadline</span><strong>{{ row.product.decision_config.commitment_deadline|date:"d M, H:i" }}</strong></div>
+        <div class="product-row-actions"><a href="{% url 'dashboard:product_detail' row.product.sku_id %}" class="ram-btn ram-btn-ghost">Detail</a>{% if row.latest %}<a href="{% url 'dashboard:decision_center' row.product.sku_id %}" class="ram-btn ram-btn-outline">Analisis</a>{% endif %}</div>
+    </article>
+    {% empty %}
+    <div class="empty-state-card"><h3>Belum ada produk</h3><p>Tambahkan produk pertama untuk memulai.</p><a href="{% url 'dashboard:product_create' %}" class="ram-btn ram-btn-primary">Tambah produk</a></div>
+    {% endfor %}
+</div>
+{% endblock %}

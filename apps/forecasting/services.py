@@ -123,7 +123,13 @@ def get_forecast_provider() -> ForecastProvider:
 
     Train the artifacts with:  python scripts/train_forecast.py
     """
-    from .provider import LightGBMForecastProvider, artifacts_available
+    try:
+        from .provider import LightGBMForecastProvider, artifacts_available
+    except (ImportError, ModuleNotFoundError):
+        # The web MVP must remain runnable with the lightweight Django-only
+        # dependency set. A trained provider is optional and is selected only
+        # when its ML dependencies can actually be imported.
+        return DummyForecastProvider()
 
     if artifacts_available(feature_mode=FORECAST_FEATURE_MODE):
         return LightGBMForecastProvider(feature_mode=FORECAST_FEATURE_MODE)

@@ -1,0 +1,76 @@
+{% extends "dashboard/base.html" %}
+{% load humanize %}
+
+{% block title %}Beranda — RamAI{% endblock %}
+{% block page_title %}Beranda{% endblock %}
+
+{% block content %}
+<header class="page-heading">
+    <div>
+        <div class="eyebrow">Ringkasan operasional</div>
+        <h1>Selamat datang di RamAI.</h1>
+        <p>Lihat produk yang perlu perhatian dan lanjutkan ke keputusan yang harus diambil hari ini.</p>
+    </div>
+    <a href="{% url 'dashboard:product_create' %}" class="ram-btn ram-btn-primary">+ Tambah produk</a>
+</header>
+
+<section class="overview-kpis" aria-label="Ringkasan bisnis">
+    <article><span>Total produk</span><strong>{{ product_count }}</strong><small>SKU terdaftar</small></article>
+    <article><span>Perlu perhatian</span><strong>{{ attention_count }}</strong><small>produk perlu ditinjau</small></article>
+    <article><span>Total stok</span><strong>{{ total_stock|intcomma }}</strong><small>unit tersedia</small></article>
+    <article><span>Rencana tersimpan</span><strong>{{ draft_count }}</strong><small>keputusan disetujui</small></article>
+</section>
+
+<section class="content-section">
+    <div class="section-heading">
+        <div><div class="eyebrow">Prioritas hari ini</div><h2>Produk yang perlu diperhatikan</h2></div>
+        <a href="{% url 'dashboard:product_list' %}" class="text-link">Lihat semua produk →</a>
+    </div>
+
+    {% if product_summaries %}
+    <div class="priority-grid">
+        {% for item in product_summaries %}
+        <article class="priority-card {% if item.needs_attention %}needs-attention{% endif %}">
+            <div class="priority-card-top">
+                <div><span class="product-code">{{ item.sku.sku_id }}</span><h3>{{ item.sku.name }}</h3></div>
+                {% if not item.has_history %}<span class="status-pill status-muted">Belum ada data</span>
+                {% elif item.needs_attention %}<span class="status-pill status-warning">Perlu ditinjau</span>
+                {% else %}<span class="status-pill status-success">Normal</span>{% endif %}
+            </div>
+            <div class="priority-stats">
+                <div><span>Stok</span><strong>{{ item.stock }} unit</strong></div>
+                <div><span>Demand bertahan</span><strong>{% widthratio item.persistence 1 100 %}%</strong></div>
+                <div><span>Rekomendasi</span><strong>{% if item.recommended.action == 'COMMIT_NOW' %}Commit sekarang{% elif item.recommended.action == 'STAGED_COMMITMENT' %}Bertahap{% elif item.recommended %}Tunggu{% else %}Belum tersedia{% endif %}</strong></div>
+            </div>
+            <div class="priority-actions">
+                <a href="{% url 'dashboard:product_detail' item.sku.sku_id %}" class="ram-btn ram-btn-ghost">Lihat produk</a>
+                {% if item.has_history %}<a href="{% url 'dashboard:decision_center' item.sku.sku_id %}" class="ram-btn ram-btn-outline">Buka keputusan</a>{% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state-card">
+        <div class="empty-state-icon">+</div>
+        <h3>Belum ada produk</h3>
+        <p>Tambahkan produk pertama agar RamAI dapat mulai membantu keputusan stok.</p>
+        <a href="{% url 'dashboard:product_create' %}" class="ram-btn ram-btn-primary">Tambah produk pertama</a>
+    </div>
+    {% endif %}
+</section>
+
+<section class="content-section">
+    <div class="section-heading compact">
+        <div><div class="eyebrow">Aktivitas terbaru</div><h2>Rencana yang baru disimpan</h2></div>
+        <a href="{% url 'dashboard:plan_list' %}" class="text-link">Buka riwayat →</a>
+    </div>
+    <div class="ram-table-wrapper">
+        {% if recent_drafts %}
+        <table class="ram-table">
+            <thead><tr><th>Waktu</th><th>Produk</th><th>Aksi</th><th class="text-end">Unit sekarang</th><th class="text-end">Modal</th></tr></thead>
+            <tbody>{% for draft in recent_drafts %}<tr><td>{{ draft.approved_at|date:"d M Y, H:i" }}</td><td><a href="{% url 'dashboard:product_detail' draft.sku.sku_id %}">{{ draft.sku.name }}</a></td><td>{{ draft.recommended_action }}</td><td class="text-end">{{ draft.commit_now_units }}</td><td class="text-end">Rp{{ draft.required_capital|floatformat:0|intcomma }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty-inline">Belum ada rencana yang disimpan.</div>{% endif %}
+    </div>
+</section>
+{% endblock %}

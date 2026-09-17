@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="RamAI — Asisten keputusan produksi dan replenishment berbasis demand forecasting.">
-    <title>{% block title %}RamAI — Demand Forecasting Dashboard{% endblock %}</title>
+    <title>{% block title %}RamAI — Pusat Keputusan Stok{% endblock %}</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,39 +32,65 @@
     </script>
 </head>
 <body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<div class="app-shell">
+    <aside class="app-sidebar" id="app-sidebar">
+        <a class="sidebar-brand" href="{% url 'dashboard:index' %}" aria-label="Beranda RamAI">
+            <span class="sidebar-logo">R</span>
+            <span><strong>Ram<span>AI</span></strong><small>Inventory copilot</small></span>
+        </a>
 
-<!-- Navbar -->
-<nav class="ram-navbar">
-    <div class="ram-navbar-inner">
-        <div class="ram-brand">
-            <div class="ram-brand-logo">Ram<span class="brand-highlight">AI</span></div>
-            <div class="ram-brand-tagline">Demand Forecasting Engine</div>
+        <nav class="sidebar-nav" aria-label="Navigasi utama">
+            <span class="sidebar-label">Workspace</span>
+            <a href="{% url 'dashboard:index' %}" class="sidebar-link {% if active_nav == 'overview' %}active{% endif %}">
+                <span class="nav-glyph">BR</span><span>Beranda</span>
+            </a>
+            <a href="{% url 'dashboard:product_list' %}" class="sidebar-link {% if active_nav == 'products' %}active{% endif %}">
+                <span class="nav-glyph">PR</span><span>Produk</span>
+            </a>
+            <a href="{% url 'dashboard:decision_center_default' %}" class="sidebar-link {% if active_nav == 'decisions' %}active{% endif %}">
+                <span class="nav-glyph">DC</span><span>Decision Center</span>
+            </a>
+            <a href="{% url 'dashboard:plan_list' %}" class="sidebar-link {% if active_nav == 'plans' %}active{% endif %}">
+                <span class="nav-glyph">RP</span><span>Rencana</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-foot">
+            <span class="ram-badge-demo">Synthetic Demo Data</span>
+            <p>RamAI memberi rekomendasi. Keputusan akhir tetap milik Anda.</p>
         </div>
-        <span class="ram-badge-demo">Synthetic Demo Data</span>
+    </aside>
+
+    <div class="app-main">
+        <header class="app-topbar">
+            <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Buka menu" aria-controls="app-sidebar" aria-expanded="false">☰</button>
+            <div>
+                <span class="topbar-context">BuffTechBros</span>
+                <strong>{% block page_title %}RamAI Workspace{% endblock %}</strong>
+            </div>
+            <div class="topbar-status"><span></span> Sistem siap</div>
+        </header>
+
+        <main class="ram-container">
+            {% if messages %}
+                {% for message in messages %}
+                <div class="ram-alert ram-alert-success">
+                    <span class="ram-alert-icon">✓</span><span>{{ message }}</span>
+                </div>
+                {% endfor %}
+            {% endif %}
+            {% block content %}{% endblock %}
+        </main>
+
+        <footer class="ram-footer">
+            <div class="ram-footer-inner">
+                <span>RamAI MVP — <strong>BuffTechBros</strong></span>
+                <span>Angka dihitung oleh model; AI membantu menjelaskannya.</span>
+            </div>
+        </footer>
     </div>
-</nav>
-
-<!-- Main -->
-<main class="ram-container">
-    {% if messages %}
-        {% for message in messages %}
-        <div class="ram-alert ram-alert-success">
-            <span class="ram-alert-icon">✓</span>
-            <span>{{ message }}</span>
-        </div>
-        {% endfor %}
-    {% endif %}
-
-    {% block content %}{% endblock %}
-</main>
-
-<!-- Footer -->
-<footer class="ram-footer">
-    <div class="ram-footer-inner">
-        <span>RamAI MVP — <strong>BuffTechBros</strong></span>
-        <span>Hackathon 2026 · Demand Forecasting Challenge</span>
-    </div>
-</footer>
+</div>
+<div class="sidebar-backdrop" id="sidebar-backdrop"></div>
 
 <script src="{% static 'dashboard/js/interactions.js' %}"></script>
 {% block extra_js %}{% endblock %}

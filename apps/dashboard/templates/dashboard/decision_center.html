@@ -1,0 +1,41 @@
+{% extends "dashboard/base.html" %}
+{% load humanize static %}
+
+{% block title %}Decision Center — RamAI{% endblock %}
+{% block page_title %}Decision Center{% endblock %}
+
+{% block content %}
+<header class="workspace-header">
+    <div>
+        <div class="eyebrow">Analisis dan rekomendasi</div>
+        <h1>Ambil keputusan stok dengan lebih yakin.</h1>
+        <p>Pilih produk, pahami risikonya, coba skenario, lalu simpan rencana yang paling masuk akal.</p>
+    </div>
+    {% if skus %}
+    <div class="product-switcher">
+        <label for="sku-select">Produk yang dianalisis</label>
+        <div class="sku-select-wrapper">
+            <select id="sku-select" class="sku-select" onchange="window.location.href=this.value">
+                {% for s in skus %}
+                <option value="{% url 'dashboard:decision_center' s.sku_id %}" {% if s.sku_id == selected_sku_id %}selected{% endif %}>
+                    {{ s.sku_id }} — {{ s.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    {% endif %}
+</header>
+
+<div id="dashboard-content">
+{% if no_data %}
+    {% include "dashboard/_partials/empty_state.html" %}
+{% else %}
+    {% include "dashboard/_partials/dashboard_content.html" %}
+{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if not no_data %}<script src="{% static 'dashboard/js/charts.js' %}"></script>{% endif %}
+{% endblock %}

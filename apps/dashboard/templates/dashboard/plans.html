@@ -1,0 +1,25 @@
+{% extends "dashboard/base.html" %}
+{% load humanize %}
+
+{% block title %}Rencana — RamAI{% endblock %}
+{% block page_title %}Rencana{% endblock %}
+
+{% block content %}
+<header class="page-heading">
+    <div><div class="eyebrow">Jejak keputusan</div><h1>Rencana dan riwayat</h1><p>Periksa rencana produksi atau replenishment yang sudah disetujui oleh pengguna.</p></div>
+    <a href="{% url 'dashboard:decision_center_default' %}" class="ram-btn ram-btn-primary">Buat keputusan baru</a>
+</header>
+
+<div class="history-list">
+    {% for draft in drafts %}
+    <article class="history-card">
+        <div class="history-date"><strong>{{ draft.approved_at|date:"d" }}</strong><span>{{ draft.approved_at|date:"M Y" }}</span><small>{{ draft.approved_at|date:"H:i" }}</small></div>
+        <div class="history-main"><span>{{ draft.sku.sku_id }}</span><h3>{{ draft.sku.name }}</h3><p>{{ draft.recommended_action }}</p></div>
+        <div class="history-metrics"><div><span>Unit sekarang</span><strong>{{ draft.commit_now_units }}</strong></div><div><span>Unit susulan</span><strong>{{ draft.commit_later_units }}</strong></div><div><span>Modal</span><strong>Rp{{ draft.required_capital|floatformat:0|intcomma }}</strong></div><div><span>Kontribusi</span><strong>Rp{{ draft.expected_contribution|floatformat:0|intcomma }}</strong></div></div>
+        <div class="history-actions"><span class="status-pill status-success">Tersimpan</span><a href="{% url 'dashboard:product_detail' draft.sku.sku_id %}" class="text-link">Lihat produk →</a></div>
+    </article>
+    {% empty %}
+    <div class="empty-state-card"><h3>Belum ada rencana</h3><p>Buka Decision Center, tinjau rekomendasi, lalu simpan rencana pertama.</p><a href="{% url 'dashboard:decision_center_default' %}" class="ram-btn ram-btn-primary">Buka Decision Center</a></div>
+    {% endfor %}
+</div>
+{% endblock %}
