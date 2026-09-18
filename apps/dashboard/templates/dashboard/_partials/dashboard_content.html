@@ -53,6 +53,7 @@
             {% elif rec.action == "STAGED_COMMITMENT" %}Siapkan bertahap, tambah saat permintaan makin pasti
             {% elif rec.action == "NO_BUY_NEEDED" %}Stok sudah cukup, belum perlu tambah
             {% elif rec.action == "NO_BUY_POSSIBLE" %}Belum bisa menambah stok
+            {% elif rec.action == "NO_BUY_UNPROFITABLE" %}Tahan dulu, menambah stok belum menguntungkan
             {% else %}Tunggu dulu sampai data berikutnya masuk{% endif %}
         </div>
         <p class="recommendation-summary">
@@ -60,6 +61,7 @@
             {% elif rec.action == "STAGED_COMMITMENT" %}Jaga ketersediaan barang tanpa mengikat seluruh modal sejak awal.
             {% elif rec.action == "NO_BUY_NEEDED" %}Stok yang ada sudah menutup perkiraan permintaan sampai batas waktu. Tidak ada modal yang perlu keluar.
             {% elif rec.action == "NO_BUY_POSSIBLE" %}Kapasitas, modal, atau minimum pemesanan belum mencukupi untuk satu batch pun. Periksa asumsi di bawah.
+            {% elif rec.action == "NO_BUY_UNPROFITABLE" %}Stok yang ada menutup permintaan wajar. Menambah stok untuk skenario ramai diperkirakan lebih rugi daripada menahan modal.
             {% else %}Tahan dulu modalnya sambil menunggu kepastian permintaan berikutnya.{% endif %}
         </p>
         <div class="recommendation-metrics">
@@ -100,11 +102,13 @@
         <p>Semua opsi diuji pada forecast dan batas operasional yang sama.</p>
     </div>
     <div class="actions-grid">
-        {% include "dashboard/_action_card.html" with candidate=rec is_recommended=True %}
+        {% if rec.action != "NO_BUY_UNPROFITABLE" %}{% include "dashboard/_action_card.html" with candidate=rec is_recommended=True %}{% endif %}
         {% for alt in result.decision.alternatives %}{% include "dashboard/_action_card.html" with candidate=alt is_recommended=False %}{% endfor %}
     </div>
     {% if rec.action == "NO_BUY_NEEDED" or rec.action == "NO_BUY_POSSIBLE" %}
     <p class="options-note">Ketiga opsi keluar di angka yang sama: tidak ada batch yang {% if rec.action == "NO_BUY_POSSIBLE" %}bisa{% else %}perlu{% endif %} dibeli, jadi tidak ada yang perlu dibandingkan.</p>
+    {% elif rec.action == "NO_BUY_UNPROFITABLE" %}
+    <p class="options-note">Ketiga opsi beli di atas diperkirakan untung lebih kecil daripada tidak membeli, jadi RamAI menyarankan tahan dulu.</p>
     {% endif %}
 </section>
 
@@ -153,7 +157,7 @@
         <div class="eyebrow">Langkah berikutnya</div><h2>Rencana tindakan</h2>
         <ol class="plan-steps">
             {% if rec.commit_now_units %}<li><span>1</span><div><strong>Siapkan {{ rec.commit_now_units }} unit</strong><p>Gunakan batas modal yang sudah diperiksa mesin keputusan RamAI.</p></div></li>
-            {% else %}<li><span>1</span><div><strong>Belum ada pembelian</strong><p>{% if rec.action == "NO_BUY_POSSIBLE" %}Longgarkan modal, kapasitas, atau minimum pemesanan bila stok memang perlu ditambah.{% else %}Stok yang ada sudah cukup untuk perkiraan permintaan sampai batas waktu.{% endif %}</p></div></li>{% endif %}
+            {% else %}<li><span>1</span><div><strong>Belum ada pembelian</strong><p>{% if rec.action == "NO_BUY_POSSIBLE" %}Longgarkan modal, kapasitas, atau minimum pemesanan bila stok memang perlu ditambah.{% elif rec.action == "NO_BUY_UNPROFITABLE" %}Tambahan stok belum sebanding dengan risikonya; stok yang ada dipakai dulu.{% else %}Stok yang ada sudah cukup untuk perkiraan permintaan sampai batas waktu.{% endif %}</p></div></li>{% endif %}
             <li><span>2</span><div><strong>Pantau order berikutnya</strong><p>Perhatikan perubahan demand dan ketersediaan stok.</p></div></li>
             <li><span>3</span><div><strong>Evaluasi {{ rec.reevaluate_at|date:"d M, H:i" }}</strong><p>Hitung ulang sebelum menambah {{ rec.commit_later_units }} unit berikutnya.</p></div></li>
         </ol>

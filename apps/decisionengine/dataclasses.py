@@ -7,9 +7,10 @@ from datetime import datetime
 @dataclass
 class ActionCandidate:
     # COMMIT_NOW | STAGED_COMMITMENT | WAIT, plus the two terminal states the
-    # engine reports when every candidate comes out at zero units:
-    # NO_BUY_NEEDED (stock already covers P90 demand) and NO_BUY_POSSIBLE
-    # (capacity, capital or MOQ blocks every batch).
+    # engine reports when it recommends buying nothing:
+    # NO_BUY_NEEDED (stock already covers P90 demand), NO_BUY_POSSIBLE
+    # (capacity, capital or MOQ blocks every batch) and NO_BUY_UNPROFITABLE
+    # (a batch is possible, but none beats buying nothing).
     action: str
     commit_now_units: int
     commit_later_units: int

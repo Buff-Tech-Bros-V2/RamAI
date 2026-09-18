@@ -49,6 +49,14 @@ DELAY_RISK_FRACTION = {
 FULFILMENT_RATE_WINDOW_HOURS = 24 * 30
 HOLDING_COST_RATE_PER_DAY = 0.001  # share of unit_variable_cost, per unit, per day
 
+# Every candidate is scored against three demand scenarios -- the forecast's
+# P10, P50 and P90 -- instead of P50 alone. Sizing orders to cover P90 while
+# valuing them only at P50 made any safety stock a guaranteed loss on paper:
+# the buffer could never be sold in the one scenario it was scored in. These
+# are the Swanson's-rule weights (0.3 / 0.4 / 0.3), the standard way to turn
+# P10/P50/P90 into an expected value when the full distribution is unknown.
+DEMAND_SCENARIO_WEIGHTS = (("p10", 0.3), ("p50", 0.4), ("p90", 0.3))
+
 
 class DecisionEngine:
     def evaluate_actions(
@@ -102,6 +110,11 @@ class DecisionEngine:
 
         demand_p50 = forecast.p50
         demand_p90 = forecast.p90
+
+        demand_scenarios = [
+            (weight, float(getattr(forecast, quantile)))
+            for quantile, weight in DEMAND_SCENARIO_WEIGHTS
+        ]
 
         gap_p50 = max(demand_p50 - current_stock, 0)
         gap_p90 = max(demand_p90 - current_stock, 0)
@@ -180,7 +193,7 @@ class DecisionEngine:
                 commit_now_units=commit_now_full,
                 commit_later_units=0,
                 reevaluate_at=deadline,
-                demand_p50=demand_p50,
+                demand_scenarios=demand_scenarios,
                 current_stock=current_stock,
                 fulfilment_rates=fulfilment_rates,
                 horizon_days=horizon_days,
@@ -195,7 +208,7 @@ class DecisionEngine:
                 commit_now_units=commit_now_staged,
                 commit_later_units=commit_later_staged,
                 reevaluate_at=midpoint,
-                demand_p50=demand_p50,
+                demand_scenarios=demand_scenarios,
                 current_stock=current_stock,
                 fulfilment_rates=fulfilment_rates,
                 horizon_days=horizon_days,
@@ -213,7 +226,7 @@ class DecisionEngine:
                 commit_now_units=0,
                 commit_later_units=wait_units,
                 reevaluate_at=deadline,
-                demand_p50=demand_p50,
+                demand_scenarios=demand_scenarios,
                 current_stock=current_stock,
                 fulfilment_rates=fulfilment_rates,
                 horizon_days=horizon_days,
@@ -225,11 +238,41 @@ class DecisionEngine:
             ),
         ]
 
+        # Buying nothing is always an option, and every purchase has to beat
+        # it. Without this baseline the engine could only pick the least-bad
+        # of three purchases, and would recommend one even when all three
+        # lose money. Scored the same way, so an under-stocked shelf still
+        # pays its lost-sales penalty here.
+        buy_nothing = self._score_candidate(
+            action="NO_BUY_UNPROFITABLE",
+            commit_now_units=0,
+            commit_later_units=0,
+            reevaluate_at=deadline,
+            demand_scenarios=demand_scenarios,
+            current_stock=current_stock,
+            fulfilment_rates=fulfilment_rates,
+            horizon_days=horizon_days,
+            unit_selling_price=unit_selling_price,
+            unit_variable_cost=unit_variable_cost,
+            salvage_value_per_unit=effective_salvage,
+            delay_risk=0.0,
+            material_per_unit=material_per_unit,
+        )
+
+        # On a tie, the plan that ties up less stock -- and commits it later --
+        # wins: equal expected value for less money at risk. Without this,
+        # `max` returns whichever candidate happens to be listed first.
+        def rank(c: ActionCandidate):
+            return (
+                c.expected_contribution,
+                -(c.commit_now_units + c.commit_later_units),
+                -c.commit_now_units,
+            )
+
         # When nothing can or should be bought, all three candidates collapse
-        # to the same zero-unit plan with identical economics, and `max` would
-        # just return whichever happens to be listed first -- surfacing
-        # "commit now, 0 units" as if it were a real choice. Report the actual
-        # state instead, and drop the alternatives: there is nothing to compare.
+        # to the same zero-unit plan with identical economics. Report the
+        # actual state instead, and drop the alternatives: there is nothing to
+        # compare.
         if all(c.commit_now_units + c.commit_later_units == 0 for c in candidates):
             recommended = replace(
                 candidates[0],
@@ -238,8 +281,16 @@ class DecisionEngine:
             )
             alternatives = candidates[1:]
         else:
-            recommended = max(candidates, key=lambda c: c.expected_contribution)
-            alternatives = [c for c in candidates if c is not recommended]
+            best = max(candidates, key=rank)
+            if rank(best) <= rank(buy_nothing):
+                # Every purchase is expected to earn less than holding off,
+                # so recommend holding off -- and keep all three purchases as
+                # alternatives so the seller can see what each would cost.
+                recommended = buy_nothing
+                alternatives = candidates
+            else:
+                recommended = best
+                alternatives = [c for c in candidates if c is not recommended]
 
         if "insufficient_history" in forecast.data_quality_flags:
             confidence = "LOW"
@@ -318,6 +369,14 @@ class DecisionEngine:
                 "ketiganya dianggap 0%."
             )
         assumptions.append(
+            "Untung tiap opsi adalah rata-rata tertimbang tiga skenario permintaan: "
+            + ", ".join(
+                f"{quantile.upper()} {getattr(forecast, quantile):.0f} unit ({weight:.0%})"
+                for quantile, weight in DEMAND_SCENARIO_WEIGHTS
+            )
+            + ". Opsi beli hanya direkomendasikan bila untungnya melebihi tidak membeli."
+        )
+        assumptions.append(
             f"Biaya simpan {HOLDING_COST_RATE_PER_DAY:.1%} dari biaya per unit per hari "
             "(asumsi placeholder: tidak ada parameter biaya simpan di konfigurasi)."
         )
@@ -380,7 +439,7 @@ class DecisionEngine:
         commit_now_units: float,
         commit_later_units: float,
         reevaluate_at,
-        demand_p50: float,
+        demand_scenarios: list[tuple[float, float]],
         current_stock: float,
         unit_selling_price: float,
         unit_variable_cost: float,
@@ -390,15 +449,75 @@ class DecisionEngine:
         horizon_days: float,
         material_per_unit: float | None = None,
     ) -> ActionCandidate:
+        """Probability-weighted outcome of one commitment across demand scenarios."""
         committed_total = commit_now_units + commit_later_units
+        outcomes = [
+            (
+                weight,
+                self._scenario_outcome(
+                    demand=demand,
+                    committed_total=committed_total,
+                    current_stock=current_stock,
+                    unit_selling_price=unit_selling_price,
+                    unit_variable_cost=unit_variable_cost,
+                    salvage_value_per_unit=salvage_value_per_unit,
+                    delay_risk=delay_risk,
+                    fulfilment_rates=fulfilment_rates,
+                    horizon_days=horizon_days,
+                ),
+            )
+            for weight, demand in demand_scenarios
+        ]
+        total_weight = sum(weight for weight, _ in outcomes)
 
+        def expected(key: str) -> float:
+            return sum(weight * outcome[key] for weight, outcome in outcomes) / total_weight
+
+        expected_contribution = expected("contribution")
+        fill_rate = expected("fill_rate")
+        lost_units = expected("lost_units")
+        residual_units = expected("residual_units")
+        ending_inventory_units = expected("ending_inventory_units")
+        required_capital = committed_total * unit_variable_cost
+
+        return ActionCandidate(
+            action=action,
+            commit_now_units=round(commit_now_units),
+            commit_later_units=round(commit_later_units),
+            reevaluate_at=reevaluate_at,
+            required_capital=round(required_capital, 2),
+            expected_contribution=round(expected_contribution, 2),
+            expected_fill_rate=round(fill_rate, 2),
+            expected_lost_units=round(lost_units, 1),
+            residual_stock_risk_units=round(residual_units, 1),
+            ending_inventory_units=round(ending_inventory_units, 1),
+            required_material=(
+                round(committed_total * material_per_unit, 2)
+                if material_per_unit
+                else None
+            ),
+        )
+
+    @staticmethod
+    def _scenario_outcome(
+        demand: float,
+        committed_total: float,
+        current_stock: float,
+        unit_selling_price: float,
+        unit_variable_cost: float,
+        salvage_value_per_unit: float,
+        delay_risk: float,
+        fulfilment_rates: dict,
+        horizon_days: float,
+    ) -> dict:
+        """PRD 11 contribution of one commitment if demand turns out to be `demand`."""
         # Stock already on the shelf serves demand first: it is a sunk
         # purchase, so it removes lost sales but earns this decision no
         # revenue. Only the newly committed units are scored on their own
         # economics -- otherwise a SKU whose shelf already covers demand
         # would be charged a lost-sales penalty for demand it fully serves.
-        served_from_stock = min(current_stock, demand_p50)
-        unmet_demand = max(demand_p50 - served_from_stock, 0)
+        served_from_stock = min(current_stock, demand)
+        unmet_demand = max(demand - served_from_stock, 0)
 
         # `committed_total` units are produced/paid for regardless of delay
         # risk. Delay risk only shrinks how much of the demand-matching
@@ -414,15 +533,11 @@ class DecisionEngine:
         # PRD 6.2 / 11: cancellations, failed deliveries and returns move money,
         # never fulfilment demand -- so they thin out the units that actually
         # turn into `successful_sales` without changing what was committed.
-        cancel_rate = fulfilment_rates["cancel_rate"]
-        delivery_failure_rate = fulfilment_rates["delivery_failure_rate"]
-        return_rate = fulfilment_rates["return_rate"]
-
-        cancelled_units = delivered * cancel_rate
+        cancelled_units = delivered * fulfilment_rates["cancel_rate"]
         shipped_units = delivered - cancelled_units
-        failed_delivery_units = shipped_units * delivery_failure_rate
+        failed_delivery_units = shipped_units * fulfilment_rates["delivery_failure_rate"]
         arrived_units = shipped_units - failed_delivery_units
-        returned_units = arrived_units * return_rate
+        returned_units = arrived_units * fulfilment_rates["return_rate"]
         successful_sales = arrived_units - returned_units
 
         # PRD 11: "Biaya tidak boleh dihitung dua kali." Every committed unit is
@@ -452,7 +567,7 @@ class DecisionEngine:
         # Holding is charged only on the inventory this decision creates. Stock
         # that was already on the shelf is sunk: it earns this decision no
         # revenue, so it must not be charged its carrying cost here either --
-        # and since that cost is identical across all three candidates it never
+        # and since that cost is identical across all candidates it never
         # changes the ranking, it would only push "buy nothing" below zero.
         holding_cost = (
             (committed_total + residual_units)
@@ -464,7 +579,7 @@ class DecisionEngine:
 
         lost_sales_penalty = lost_units * (unit_selling_price - unit_variable_cost) * 0.5
 
-        expected_contribution = (
+        contribution = (
             delivered_revenue
             - procurement_cost
             + terminal_value
@@ -473,25 +588,12 @@ class DecisionEngine:
         )
         # Fill rate answers "how much demand gets served", so it counts both
         # sources -- unlike contribution, which counts only new units.
-        fill_rate = (
-            (served_from_stock + delivered) / demand_p50 if demand_p50 > 0 else 1.0
-        )
-        required_capital = committed_total * unit_variable_cost
+        fill_rate = (served_from_stock + delivered) / demand if demand > 0 else 1.0
 
-        return ActionCandidate(
-            action=action,
-            commit_now_units=round(commit_now_units),
-            commit_later_units=round(commit_later_units),
-            reevaluate_at=reevaluate_at,
-            required_capital=round(required_capital, 2),
-            expected_contribution=round(expected_contribution, 2),
-            expected_fill_rate=round(fill_rate, 2),
-            expected_lost_units=round(lost_units, 1),
-            residual_stock_risk_units=round(residual_units, 1),
-            ending_inventory_units=round(ending_inventory_units, 1),
-            required_material=(
-                round(committed_total * material_per_unit, 2)
-                if material_per_unit
-                else None
-            ),
-        )
+        return {
+            "contribution": contribution,
+            "fill_rate": fill_rate,
+            "lost_units": lost_units,
+            "residual_units": residual_units,
+            "ending_inventory_units": ending_inventory_units,
+        }

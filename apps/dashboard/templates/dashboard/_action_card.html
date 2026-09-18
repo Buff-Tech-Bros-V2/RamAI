@@ -9,6 +9,7 @@
                 {% elif candidate.action == "STAGED_COMMITMENT" %}Siapkan bertahap
                 {% elif candidate.action == "NO_BUY_NEEDED" %}Stok sudah cukup
                 {% elif candidate.action == "NO_BUY_POSSIBLE" %}Belum bisa menambah stok
+                {% elif candidate.action == "NO_BUY_UNPROFITABLE" %}Tahan dulu, belum menguntungkan
                 {% else %}Tunggu dulu{% endif %}
             </h3>
         </div>
@@ -19,6 +20,7 @@
         {% elif candidate.action == "STAGED_COMMITMENT" %}Mulai secukupnya, lalu tambah ketika sinyal semakin pasti.
         {% elif candidate.action == "NO_BUY_NEEDED" %}Stok yang ada sudah menutup perkiraan permintaan.
         {% elif candidate.action == "NO_BUY_POSSIBLE" %}Batas modal, kapasitas, atau minimum pemesanan menghalangi semua batch.
+        {% elif candidate.action == "NO_BUY_UNPROFITABLE" %}Setiap opsi beli diperkirakan untung lebih kecil daripada tidak membeli.
         {% else %}Tahan modal sekarang sambil menerima risiko kehilangan penjualan.{% endif %}
     </p>
     <div class="action-primary-value"><span>Disiapkan sekarang</span><strong>{{ candidate.commit_now_units }} unit</strong></div>

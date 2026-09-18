@@ -15,6 +15,7 @@ ACTION_LABELS = {
     "WAIT": "Tunggu dulu",
     "NO_BUY_NEEDED": "Stok sudah cukup",
     "NO_BUY_POSSIBLE": "Belum bisa menambah stok",
+    "NO_BUY_UNPROFITABLE": "Tahan dulu, belum menguntungkan",
 }
 
 # Same meaning, for cells too narrow for the full phrase.
@@ -24,6 +25,7 @@ ACTION_LABELS_SHORT = {
     "WAIT": "Tunggu dulu",
     "NO_BUY_NEEDED": "Stok cukup",
     "NO_BUY_POSSIBLE": "Belum bisa tambah",
+    "NO_BUY_UNPROFITABLE": "Tahan dulu",
 }
 
 

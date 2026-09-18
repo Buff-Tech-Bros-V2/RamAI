@@ -38,6 +38,7 @@ ACTION_LABELS = {
     "WAIT": "tunggu dulu sebelum menambah stok",
     "NO_BUY_NEEDED": "stok sudah cukup, belum perlu tambah",
     "NO_BUY_POSSIBLE": "belum bisa menambah stok karena batas modal/kapasitas/minimum pesan",
+    "NO_BUY_UNPROFITABLE": "tahan dulu, menambah stok belum menguntungkan",
 }
 
 
