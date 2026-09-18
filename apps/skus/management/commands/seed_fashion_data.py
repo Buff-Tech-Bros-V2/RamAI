@@ -49,7 +49,11 @@ SCENARIOS = [
         content_missing=False,
         unit_selling_price=145000,
         unit_variable_cost=85000,
-        supplier_lead_time_hours=72,
+        # Short local-supplier lead time: comfortably inside the 48h forecast
+        # horizon, so a same-day restock isn't automatically drowned out by
+        # delay risk (see DecisionEngine._score_candidate) -- demo target:
+        # COMMIT_NOW.
+        supplier_lead_time_hours=12,
         working_capital_limit=25000000,
         salvage_value_per_unit=60000,
         deadline_hours_from_now=24,
@@ -66,9 +70,16 @@ SCENARIOS = [
         content_missing=False,
         unit_selling_price=165000,
         unit_variable_cost=95000,
-        supplier_lead_time_hours=96,
-        working_capital_limit=28000000,
-        salvage_value_per_unit=65000,
+        # No salvage value: an off-trend dress is close to unsellable once
+        # the surge fades, so over-committing to the P90 case in one shot is
+        # risky. Capital is sized between the P50 and P90 capital needs (not
+        # binding at P50) so the two commitment tranches genuinely differ in
+        # size -- demo target: STAGED_COMMITMENT, hedging the extra P90-P50
+        # units against a checkpoint at the reevaluation midpoint instead of
+        # committing them now.
+        supplier_lead_time_hours=8,
+        working_capital_limit=100000000,
+        salvage_value_per_unit=0,
         deadline_hours_from_now=24,
     ),
     dict(
@@ -83,7 +94,8 @@ SCENARIOS = [
         content_missing=False,
         unit_selling_price=220000,
         unit_variable_cost=130000,
-        supplier_lead_time_hours=120,
+        # Short lead time -- demo target: COMMIT_NOW.
+        supplier_lead_time_hours=12,
         working_capital_limit=22000000,
         salvage_value_per_unit=90000,
         deadline_hours_from_now=48,
@@ -100,6 +112,9 @@ SCENARIOS = [
         content_missing=True,
         unit_selling_price=185000,
         unit_variable_cost=105000,
+        # Lead time at/above the 48h forecast horizon: goods can't land
+        # inside the window, so no commitment is worth its delay risk --
+        # demo target: NO_BUY_UNPROFITABLE (tahan dulu).
         supplier_lead_time_hours=72,
         working_capital_limit=9000000,
         salvage_value_per_unit=70000,
@@ -117,6 +132,8 @@ SCENARIOS = [
         content_missing=False,
         unit_selling_price=75000,
         unit_variable_cost=42000,
+        # Lead time exactly at the 48h horizon: delay risk still saturates --
+        # demo target: NO_BUY_UNPROFITABLE (tahan dulu).
         supplier_lead_time_hours=48,
         working_capital_limit=15000000,
         salvage_value_per_unit=30000,
