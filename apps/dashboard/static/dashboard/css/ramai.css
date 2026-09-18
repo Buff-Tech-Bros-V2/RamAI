@@ -352,7 +352,7 @@ td,th,.stat-value,.metric-value{font-variant-numeric:tabular-nums}
 .ai-skeleton span:nth-child(4){width:85%}
 @keyframes shimmer{from{background-position:100% 0}to{background-position:-100% 0}}
 
-.key-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:48px}
+.key-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
 .key-metric{display:flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--ram-border);border-radius:var(--radius-lg);padding:16px 18px;box-shadow:var(--shadow-sm)}
 .metric-index{font-family:'Poppins',sans-serif;font-size:11px;font-weight:700;color:var(--ram-teal-600);width:32px;height:32px;display:grid;place-items:center;background:rgba(6,182,212,.1);border-radius:9px}
 .key-metric div{display:flex;flex-direction:column}
