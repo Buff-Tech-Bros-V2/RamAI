@@ -220,6 +220,17 @@ class DecisionEngine:
                     [(commit_now_staged, now), (commit_later_staged, midpoint)],
                 ),
                 material_per_unit=material_per_unit,
+                # The whole point of staging vs. committing everything now is
+                # the checkpoint at `midpoint`: the second tranche only ships
+                # if demand has held up to at least the median forecast by
+                # then. Below that, a fading surge means it gets cancelled
+                # before it ships (PRD 7: agent re-checks persistence before
+                # the later tranche). Without this, staging only adds delay
+                # risk to the same total quantity and can never beat
+                # COMMIT_NOW.
+                checkpoint_demand=demand_p50,
+                delay_risk_now=delay_risk("STAGED_COMMITMENT", now),
+                delay_risk_later=delay_risk("STAGED_COMMITMENT", midpoint),
             ),
             self._score_candidate(
                 action="WAIT",
@@ -447,26 +458,52 @@ class DecisionEngine:
         fulfilment_rates: dict,
         horizon_days: float,
         material_per_unit: float | None = None,
+        checkpoint_demand: float | None = None,
+        delay_risk_now: float | None = None,
+        delay_risk_later: float | None = None,
     ) -> ActionCandidate:
-        """Probability-weighted outcome of one commitment across demand scenarios."""
-        committed_total = commit_now_units + commit_later_units
-        outcomes = [
-            (
-                weight,
-                self._scenario_outcome(
-                    demand=demand,
-                    committed_total=committed_total,
-                    current_stock=current_stock,
-                    unit_selling_price=unit_selling_price,
-                    unit_variable_cost=unit_variable_cost,
-                    salvage_value_per_unit=salvage_value_per_unit,
-                    delay_risk=delay_risk,
-                    fulfilment_rates=fulfilment_rates,
-                    horizon_days=horizon_days,
-                ),
+        """Probability-weighted outcome of one commitment across demand scenarios.
+
+        `checkpoint_demand` models the reevaluation point a staged
+        commitment is scored on: in any demand scenario that comes in below
+        it, the later tranche is treated as cancelled before it ships
+        (the surge faded, so it never gets placed) rather than committed
+        unconditionally. Without this, a later tranche only adds delay risk
+        on top of the same total quantity COMMIT_NOW would place, so staging
+        could never be worth more than committing everything up front.
+        """
+        outcomes = []
+        for weight, demand in demand_scenarios:
+            if checkpoint_demand is not None and demand < checkpoint_demand:
+                committed_total = commit_now_units
+                scenario_delay_risk = delay_risk_now or 0.0
+            else:
+                committed_total = commit_now_units + commit_later_units
+                scenario_delay_risk = (
+                    (
+                        commit_now_units * (delay_risk_now or 0.0)
+                        + commit_later_units * (delay_risk_later or 0.0)
+                    )
+                    / committed_total
+                    if checkpoint_demand is not None and committed_total > 0
+                    else delay_risk
+                )
+            outcomes.append(
+                (
+                    weight,
+                    self._scenario_outcome(
+                        demand=demand,
+                        committed_total=committed_total,
+                        current_stock=current_stock,
+                        unit_selling_price=unit_selling_price,
+                        unit_variable_cost=unit_variable_cost,
+                        salvage_value_per_unit=salvage_value_per_unit,
+                        delay_risk=scenario_delay_risk,
+                        fulfilment_rates=fulfilment_rates,
+                        horizon_days=horizon_days,
+                    ),
+                )
             )
-            for weight, demand in demand_scenarios
-        ]
         total_weight = sum(weight for weight, _ in outcomes)
 
         def expected(key: str) -> float:
