@@ -87,13 +87,16 @@
             <span>Evaluasi ulang {{ rec.reevaluate_at|date:"d M, H:i" }}</span>
         </div>
     </article>
-    {% include "dashboard/_partials/ai_explanation.html" with explanation_text=result.explanation_text %}
 </section>
 
 <section class="key-metrics" aria-label="Ringkasan kondisi">
     <article class="key-metric animate-in"><span class="metric-index">01</span><div><span>Stok saat ini</span><strong>{{ result.current_stock }} unit</strong></div></article>
     <article class="key-metric animate-in"><span class="metric-index">02</span><div><span>Peluang demand bertahan</span><strong>{% widthratio result.decision.surge_persistence_48h 1 100 %}%</strong></div></article>
     <article class="key-metric animate-in"><span class="metric-index">03</span><div><span>Batas keputusan</span><strong>{{ result.decision.deadline|date:"d M, H:i" }}</strong><small>{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }} jam lagi</small></div></article>
+</section>
+
+<section class="ai-explanation-section">
+    {% include "dashboard/_partials/ai_explanation.html" with explanation_text=result.explanation_text %}
 </section>
 
 <section class="content-section" aria-labelledby="options-title">

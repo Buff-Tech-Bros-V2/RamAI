@@ -25,7 +25,7 @@
             <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|default_if_none:''|floatformat:0 }}">
             <input type="hidden" name="capital" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit|floatformat:0 }}">
             <input type="hidden" name="window_hours" value="{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }}">
-            <p class="ai-idle-copy">Angka rekomendasi di samping sudah siap. Jalankan analisis untuk meminta RamAI menjelaskan alasannya.</p>
+            <p class="ai-idle-copy">Angka rekomendasi di atas sudah siap. Jalankan analisis untuk meminta RamAI menjelaskan alasannya.</p>
             <button type="submit" class="ram-btn ram-btn-primary">
                 {% if explanation_error %}Coba analisis lagi{% else %}Analisis{% endif %}
             </button>
