@@ -16,6 +16,7 @@ FR-O07 (cross-SKU capacity allocation) is not implemented (marked P1 in
 the PRD).
 """
 
+import math
 from dataclasses import replace
 from datetime import timedelta
 
@@ -105,17 +106,26 @@ class DecisionEngine:
         gap_p50 = max(demand_p50 - current_stock, 0)
         gap_p90 = max(demand_p90 - current_stock, 0)
 
-        def feasible(units: float, ceiling: float) -> float:
-            """Clamp to the capacity/capital ceiling, then honour the MOQ.
+        def feasible(units: float, ceiling: float) -> int:
+            """Clamp to the capacity/capital ceiling, honour the MOQ, return whole units.
 
             A batch smaller than `minimum_commitment` cannot be placed at all,
             so it is either rounded up to the MOQ (when the ceilings allow) or
             dropped entirely -- never silently ordered below the minimum.
+
+            Quantities are whole units from here on, before anything is scored:
+            you cannot produce or order 318.2 units, and rounding only at
+            display time made the UI show a batch of 318 while the economics
+            behind it were computed on 318.2 -- numbers a reader could not
+            reproduce (PRD 19: "Semua angka rekomendasi dapat ditelusuri ke
+            tool output"). Rounding is downward so a batch can never breach
+            the capital or capacity ceiling it was just clamped to.
             """
-            units = max(0.0, min(units, ceiling))
-            if units <= 0 or minimum_commitment <= 0 or units >= minimum_commitment:
+            units = math.floor(max(0.0, min(units, ceiling)))
+            moq = math.ceil(minimum_commitment)
+            if units <= 0 or moq <= 0 or units >= moq:
                 return units
-            return minimum_commitment if minimum_commitment <= ceiling else 0.0
+            return moq if moq <= ceiling else 0
 
         commit_now_full = feasible(gap_p90, max_units)
         commit_now_staged = feasible(gap_p50, max_units)
