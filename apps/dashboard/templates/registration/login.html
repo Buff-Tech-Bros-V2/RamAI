@@ -1,34 +1,55 @@
-{% extends "dashboard/base.html" %}
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="RamAI — Asisten keputusan produksi dan replenishment berbasis demand forecasting.">
+    <title>Login — RamAI</title>
+    <link rel="icon" type="image/jpeg" href="https://i.imgur.com/kaavgrz.jpeg">
 
-{% block title %}Login — RamAI{% endblock %}
-{% block page_title %}Login{% endblock %}
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
 
-{% block content %}
-<div class="login-wrapper">
-    <div class="login-card">
-        <div class="card-title">Login</div>
-        <p class="card-desc">Login dibutuhkan untuk menyetujui rencana keputusan. Melihat dashboard dan mencoba what-if tetap bisa tanpa login.</p>
+    <!-- Design System -->
+    <link rel="stylesheet" href="{% static 'dashboard/css/ramai.css' %}">
+</head>
+<body>
+<div class="login-page">
+    <div class="login-wrapper">
+        <div class="login-card">
+            <a class="login-brand" href="{% url 'dashboard:index' %}" aria-label="Beranda RamAI">
+                <img src="https://i.imgur.com/kaavgrz.jpeg" alt="Logo RamAI" class="sidebar-logo">
+                <span><strong>Ram<span>AI</span></strong></span>
+            </a>
 
-        {% if form.errors %}
-        <div class="ram-alert ram-alert-warning">
-            <span class="ram-alert-icon">!</span>
-            <span>Username atau password salah.</span>
+            <div class="card-title">Login</div>
+            <p class="card-desc">Login dibutuhkan untuk mengakses RamAI. Setiap akun hanya melihat produk dan rencana milik tokonya sendiri.</p>
+
+            {% if form.errors %}
+            <div class="ram-alert ram-alert-warning">
+                <span class="ram-alert-icon">!</span>
+                <span>Username atau password salah.</span>
+            </div>
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+                <div class="ram-form-group">
+                    <label class="ram-label" for="id_username">Username</label>
+                    <input type="text" name="username" id="id_username" class="ram-input" autofocus required>
+                </div>
+                <div class="ram-form-group">
+                    <label class="ram-label" for="id_password">Password</label>
+                    <input type="password" name="password" id="id_password" class="ram-input" required>
+                </div>
+                <input type="hidden" name="next" value="{{ next }}">
+                <button type="submit" class="ram-btn ram-btn-primary ram-btn-lg ram-btn-full">Login</button>
+            </form>
         </div>
-        {% endif %}
-
-        <form method="post">
-            {% csrf_token %}
-            <div class="ram-form-group">
-                <label class="ram-label" for="id_username">Username</label>
-                <input type="text" name="username" id="id_username" class="ram-input" autofocus required>
-            </div>
-            <div class="ram-form-group">
-                <label class="ram-label" for="id_password">Password</label>
-                <input type="password" name="password" id="id_password" class="ram-input" required>
-            </div>
-            <input type="hidden" name="next" value="{{ next }}">
-            <button type="submit" class="ram-btn ram-btn-primary ram-btn-lg ram-btn-full">Login</button>
-        </form>
     </div>
 </div>
-{% endblock %}
+</body>
+</html>

@@ -205,8 +205,14 @@ td,th,.stat-value,.metric-value{font-variant-numeric:tabular-nums}
 .ram-btn-lg{padding:16px 24px;font-size:14px}
 
 /* ---------- Login ---------- */
-.login-wrapper{display:flex;justify-content:center;padding:60px 0}
+.login-page{min-height:100vh;background:var(--ram-bg-light)}
+.login-wrapper{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
 .login-card{background:var(--ram-bg-card);border:1px solid var(--ram-border);border-radius:var(--radius-lg);padding:32px;box-shadow:var(--shadow-sm);width:100%;max-width:380px}
+.login-brand{display:flex;align-items:center;gap:12px;margin-bottom:24px;color:var(--ram-ink-900)}
+.login-brand:hover{color:var(--ram-ink-900)}
+.login-brand .sidebar-logo{border-radius:11px;box-shadow:0 8px 20px rgba(6,182,212,.2)}
+.login-brand strong{font-family:'Poppins',sans-serif;font-size:19px;line-height:1.1}
+.login-brand strong span{color:var(--ram-teal-500)}
 .login-card .card-title{font-size:18px;font-weight:700;margin-bottom:8px}
 .login-card .card-desc{font-size:12px;color:var(--ram-muted-500);margin-bottom:20px;line-height:1.6}
 
