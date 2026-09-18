@@ -14,6 +14,21 @@ try:
 except ImportError:
     md_lib = None
 
+try:
+    import bleach
+except ImportError:
+    bleach = None
+
+# Explanation text is our own template output OR an LLM provider response, so
+# it is not fully trusted: strip anything Markdown didn't generate itself
+# (script tags, event handlers, javascript: URLs) before mark_safe.
+_ALLOWED_TAGS = [
+    "h1", "h2", "h3", "h4", "p", "strong", "em", "ul", "ol", "li",
+    "br", "hr", "code", "pre", "blockquote", "a",
+]
+_ALLOWED_ATTRS = {"a": ["href", "title", "rel"]}
+_ALLOWED_PROTOCOLS = ["http", "https", "mailto"]
+
 register = template.Library()
 
 ACTION_LABELS = {
@@ -58,6 +73,19 @@ def render_markdown(value):
             text,
             extensions=["extra", "nl2br", "sane_lists"],
         )
+        if bleach:
+            html = bleach.clean(
+                html,
+                tags=_ALLOWED_TAGS,
+                attributes=_ALLOWED_ATTRS,
+                protocols=_ALLOWED_PROTOCOLS,
+                strip=True,
+            )
+        else:
+            # No sanitizer available -- fail closed to escaped plain text
+            # rather than risk rendering unsanitized HTML.
+            from django.utils.html import escape, linebreaks
+            return mark_safe(linebreaks(escape(text)))
         return mark_safe(html)
     from django.utils.html import escape, linebreaks
     return mark_safe(linebreaks(escape(text)))

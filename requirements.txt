@@ -3,6 +3,7 @@ Django==5.2.17
 sqlparse==0.6.0
 tzdata==2026.4
 markdown==3.10.3
+bleach==6.4.0
 
 # ML / forecasting track
 numpy==2.4.4
