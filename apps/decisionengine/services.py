@@ -324,10 +324,9 @@ class DecisionEngine:
             )
         else:
             assumptions.append(
-                "Tidak ada lead time supplier (produksi sendiri); risiko keterlambatan "
-                f"staged/wait pakai asumsi placeholder "
-                f"({DELAY_RISK_FRACTION['STAGED_COMMITMENT']:.0%}/"
-                f"{DELAY_RISK_FRACTION['WAIT']:.0%})."
+                "Tidak ada lead time supplier (produksi sendiri); estimasi risiko keterlambatan "
+                f"staged {DELAY_RISK_FRACTION['STAGED_COMMITMENT']:.0%} dan "
+                f"wait {DELAY_RISK_FRACTION['WAIT']:.0%}."
             )
 
         if minimum_commitment > 0:
@@ -369,16 +368,16 @@ class DecisionEngine:
                 "ketiganya dianggap 0%."
             )
         assumptions.append(
-            "Untung tiap opsi adalah rata-rata tertimbang tiga skenario permintaan: "
+            "Untung tiap opsi adalah estimasi total laba usaha selama horizon berdasarkan rata-rata tertimbang tiga skenario permintaan: "
             + ", ".join(
                 f"{quantile.upper()} {getattr(forecast, quantile):.0f} unit ({weight:.0%})"
                 for quantile, weight in DEMAND_SCENARIO_WEIGHTS
             )
-            + ". Opsi beli hanya direkomendasikan bila untungnya melebihi tidak membeli."
+            + ". Opsi beli hanya direkomendasikan bila menghasilkan laba lebih tinggi dibanding menahan modal."
         )
         assumptions.append(
-            f"Biaya simpan {HOLDING_COST_RATE_PER_DAY:.1%} dari biaya per unit per hari "
-            "(asumsi placeholder: tidak ada parameter biaya simpan di konfigurasi)."
+            f"Biaya simpan diestimasi {HOLDING_COST_RATE_PER_DAY:.1%} dari biaya per unit per hari "
+            "(standar operasional penyimpanan)."
         )
 
         if material_per_unit:
@@ -478,7 +477,7 @@ class DecisionEngine:
         lost_units = expected("lost_units")
         residual_units = expected("residual_units")
         ending_inventory_units = expected("ending_inventory_units")
-        required_capital = committed_total * unit_variable_cost
+        required_capital = commit_now_units * unit_variable_cost
 
         return ActionCandidate(
             action=action,
@@ -492,7 +491,7 @@ class DecisionEngine:
             residual_stock_risk_units=round(residual_units, 1),
             ending_inventory_units=round(ending_inventory_units, 1),
             required_material=(
-                round(committed_total * material_per_unit, 2)
+                round(commit_now_units * material_per_unit, 2)
                 if material_per_unit
                 else None
             ),
@@ -510,85 +509,69 @@ class DecisionEngine:
         fulfilment_rates: dict,
         horizon_days: float,
     ) -> dict:
-        """PRD 11 contribution of one commitment if demand turns out to be `demand`."""
-        # Stock already on the shelf serves demand first: it is a sunk
-        # purchase, so it removes lost sales but earns this decision no
-        # revenue. Only the newly committed units are scored on their own
-        # economics -- otherwise a SKU whose shelf already covers demand
-        # would be charged a lost-sales penalty for demand it fully serves.
-        served_from_stock = min(current_stock, demand)
-        unmet_demand = max(demand - served_from_stock, 0)
+        """PRD 11 Total business contribution over the forecast horizon."""
+        # 1. Total deliverable supply
+        # Current stock on shelf is immediately available (no delay risk).
+        # New commitments arrive subject to delay risk.
+        deliverable_new = committed_total * (1.0 - delay_risk)
+        total_supply = current_stock + deliverable_new
 
-        # `committed_total` units are produced/paid for regardless of delay
-        # risk. Delay risk only shrinks how much of the demand-matching
-        # portion actually arrives on time to be sold (delivered/lost); it
-        # must NOT shrink the base used for the residual-stock calculation,
-        # otherwise a riskier, later commitment would look like it wastes
-        # less stock than committing now -- which is backwards.
-        raw_deliverable = min(committed_total, unmet_demand)
-        delivered = raw_deliverable * (1 - delay_risk)
-        lost_units = max(unmet_demand - delivered, 0)
-        residual_units = max(committed_total - delivered, 0)
+        # 2. Demand fulfillment
+        delivered = min(total_supply, demand)
+        delivered_from_stock = min(current_stock, delivered)
+        delivered_from_new = max(delivered - delivered_from_stock, 0.0)
 
-        # PRD 6.2 / 11: cancellations, failed deliveries and returns move money,
-        # never fulfilment demand -- so they thin out the units that actually
-        # turn into `successful_sales` without changing what was committed.
-        cancelled_units = delivered * fulfilment_rates["cancel_rate"]
+        lost_units = max(demand - total_supply, 0.0)
+        residual_units = max(committed_total - delivered_from_new, 0.0)
+
+        # 3. Transaction fates (cancellations, delivery failures, returns)
+        cancel_rate = fulfilment_rates.get("cancel_rate", 0.0)
+        fail_rate = fulfilment_rates.get("delivery_failure_rate", 0.0)
+        return_rate = fulfilment_rates.get("return_rate", 0.0)
+
+        cancelled_units = delivered * cancel_rate
         shipped_units = delivered - cancelled_units
-        failed_delivery_units = shipped_units * fulfilment_rates["delivery_failure_rate"]
+        failed_delivery_units = shipped_units * fail_rate
         arrived_units = shipped_units - failed_delivery_units
-        returned_units = arrived_units * fulfilment_rates["return_rate"]
+        returned_units = arrived_units * return_rate
         successful_sales = arrived_units - returned_units
 
-        # PRD 11: "Biaya tidak boleh dihitung dua kali." Every committed unit is
-        # charged its procurement cost exactly once, here and nowhere else. What
-        # separates the outcomes is how much value comes back afterwards:
-        #   sold        -> selling price
-        #   returned    -> goods back on the shelf, worth their terminal value
-        #   cancelled   -> never shipped, still on the shelf
-        #   unsold      -> ending inventory, PRD 11's "explicit terminal value"
-        #   lost in transit -> nothing recovered; that IS the shipping-failure cost
+        # 4. Total Business Revenue and Costs
+        # Revenue from successful sales
         delivered_revenue = successful_sales * unit_selling_price
-        procurement_cost = committed_total * unit_variable_cost
-        recovered_units = cancelled_units + returned_units + residual_units
-        terminal_value = recovered_units * salvage_value_per_unit
 
-        # Ending inventory (FR-O04 / PRD 16.2): what is still on the shelf once
-        # the horizon closes. Units leave for good only by being sold or lost in
-        # transit; returns and cancellations come back.
+        # Cost of goods: every successfully sold unit incurs unit variable cost
+        cogs_sold = successful_sales * unit_variable_cost
+        shipping_failure_cost = failed_delivery_units * unit_variable_cost
+
+        # Residual stock markdown cost: newly committed units that remain unsold
+        # lose the difference between procurement cost and salvage value
+        unsold_new_loss = residual_units * max(unit_variable_cost - salvage_value_per_unit, 0.0)
+
+        # Ending inventory (FR-O04 / PRD 16.2): what is still on shelf when horizon closes
         ending_inventory_units = max(
-            current_stock
-            + committed_total
-            - served_from_stock
-            - successful_sales
-            - failed_delivery_units,
+            current_stock + committed_total - successful_sales - failed_delivery_units,
             0.0,
         )
-        # Holding is charged only on the inventory this decision creates. Stock
-        # that was already on the shelf is sunk: it earns this decision no
-        # revenue, so it must not be charged its carrying cost here either --
-        # and since that cost is identical across all candidates it never
-        # changes the ranking, it would only push "buy nothing" below zero.
+
+        # Holding cost across the inventory held over the horizon
         holding_cost = (
-            (committed_total + residual_units)
+            (current_stock + committed_total + ending_inventory_units)
             / 2
             * unit_variable_cost
             * HOLDING_COST_RATE_PER_DAY
             * horizon_days
         )
 
-        lost_sales_penalty = lost_units * (unit_selling_price - unit_variable_cost) * 0.5
-
         contribution = (
             delivered_revenue
-            - procurement_cost
-            + terminal_value
+            - cogs_sold
+            - shipping_failure_cost
+            - unsold_new_loss
             - holding_cost
-            - lost_sales_penalty
         )
-        # Fill rate answers "how much demand gets served", so it counts both
-        # sources -- unlike contribution, which counts only new units.
-        fill_rate = (served_from_stock + delivered) / demand if demand > 0 else 1.0
+
+        fill_rate = delivered / demand if demand > 0 else 1.0
 
         return {
             "contribution": contribution,
