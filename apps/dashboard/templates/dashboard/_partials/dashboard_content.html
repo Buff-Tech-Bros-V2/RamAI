@@ -76,8 +76,8 @@
             {% if user.is_authenticated %}
             <form method="post" action="{% url 'dashboard:approve_plan' sku.sku_id %}">
                 {% csrf_token %}
-                <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|default_if_none:'' }}">
-                <input type="hidden" name="capital" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit }}">
+                <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|default_if_none:''|floatformat:0 }}">
+                <input type="hidden" name="capital" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit|floatformat:0 }}">
                 <input type="hidden" name="window_hours" value="{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }}">
                 <button type="submit" class="ram-btn ram-btn-primary ram-btn-lg">Setujui dan simpan rencana</button>
             </form>
@@ -146,8 +146,8 @@
         <form method="get" action="{% url 'dashboard:decision_center' sku.sku_id %}" id="whatif-form">
             <input type="hidden" name="sku" value="{{ sku.sku_id }}">
             <div class="form-grid">
-                {% if decision_config.daily_capacity_minutes %}<div class="ram-form-group"><label class="ram-label" for="wf-capacity">Kapasitas per hari</label><input id="wf-capacity" type="number" min="0" name="capacity_minutes" class="ram-input" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes }}"><small>menit produksi</small></div>{% endif %}
-                <div class="ram-form-group"><label class="ram-label" for="wf-capital">Modal tersedia</label><input id="wf-capital" type="number" min="0" name="capital" class="ram-input" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit }}"><small>rupiah</small></div>
+                {% if decision_config.daily_capacity_minutes %}<div class="ram-form-group"><label class="ram-label" for="wf-capacity">Kapasitas per hari</label><input id="wf-capacity" type="number" min="0" name="capacity_minutes" class="ram-input" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|floatformat:0 }}"><small>menit produksi</small></div>{% endif %}
+                <div class="ram-form-group"><label class="ram-label" for="wf-capital">Modal tersedia</label><input id="wf-capital" type="number" min="0" name="capital" class="ram-input" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit|floatformat:0 }}"><small>rupiah</small></div>
                 <div class="ram-form-group"><label class="ram-label" for="wf-window">Sisa waktu keputusan</label><input id="wf-window" type="number" min="1" step="1" name="window_hours" class="ram-input" value="{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }}"><small>jam dari sekarang</small></div>
             </div>
             <button type="submit" class="ram-btn ram-btn-outline">Hitung ulang rekomendasi</button>

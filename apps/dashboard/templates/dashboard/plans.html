@@ -14,7 +14,7 @@
     {% for draft in drafts %}
     <article class="history-card">
         <div class="history-date"><strong>{{ draft.approved_at|date:"d" }}</strong><span>{{ draft.approved_at|date:"M Y" }}</span><small>{{ draft.approved_at|date:"H:i" }}</small></div>
-        <div class="history-main"><span>{{ draft.sku.sku_id }}</span><h3>{{ draft.sku.name }}</h3><p>{{ draft.recommended_action|action_label }} · disetujui oleh {{ draft.approved_by.username|default:"—" }}</p></div>
+        <div class="history-main"><span>{{ draft.sku.sku_id }}</span><h3>{{ draft.sku.name }}</h3><p>{{ draft.recommended_action|action_label }}{% if draft.approved_by %} · disetujui oleh {{ draft.approved_by.username }}{% endif %}</p></div>
         <div class="history-metrics"><div><span>Disiapkan sekarang</span><strong>{{ draft.commit_now_units }}</strong></div><div><span>Tambahan menyusul</span><strong>{{ draft.commit_later_units }}</strong></div><div><span>Modal</span><strong>Rp{{ draft.required_capital|floatformat:0|intcomma }}</strong></div><div><span>Perkiraan untung</span><strong>Rp{{ draft.expected_contribution|floatformat:0|intcomma }}</strong></div></div>
         <div class="history-actions"><span class="status-pill status-success">Tersimpan</span><a href="{% url 'dashboard:product_detail' draft.sku.sku_id %}" class="text-link">Lihat produk →</a></div>
     </article>
