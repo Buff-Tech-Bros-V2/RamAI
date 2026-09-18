@@ -5,7 +5,8 @@ from .models import DecisionConfig, HourlyObservation, SKU
 
 @admin.register(SKU)
 class SKUAdmin(admin.ModelAdmin):
-    list_display = ("sku_id", "name", "product_category", "demo_scenario")
+    list_display = ("sku_id", "name", "product_category", "owner", "demo_scenario")
+    list_filter = ("owner",)
 
 
 @admin.register(DecisionConfig)

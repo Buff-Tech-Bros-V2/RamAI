@@ -10,6 +10,7 @@ marketplace or ERP integration yet (see PRD section 21, Phase 1/2).
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import models
 
 
@@ -57,6 +58,12 @@ CONSTRAINT_PROFILE_PRESETS = {
 
 
 class SKU(models.Model):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="skus",
+        help_text="Seller account this product belongs to.",
+    )
     sku_id = models.CharField(max_length=32, primary_key=True)
     name = models.CharField(max_length=120)
     product_category = models.CharField(max_length=60)

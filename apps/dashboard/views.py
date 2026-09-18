@@ -13,7 +13,9 @@ from .forms import DecisionConfigForm, SKUForm
 
 
 def overview(request):
-    skus = list(SKU.objects.select_related("decision_config").all())
+    skus = list(
+        SKU.objects.filter(owner=request.user).select_related("decision_config")
+    )
     product_summaries = []
     total_stock = 0
     attention_count = 0
@@ -51,14 +53,16 @@ def overview(request):
         "product_count": len(skus),
         "attention_count": attention_count,
         "total_stock": total_stock,
-        "draft_count": ActionPlanDraft.objects.count(),
-        "recent_drafts": ActionPlanDraft.objects.select_related("sku")[:5],
+        "draft_count": ActionPlanDraft.objects.filter(sku__owner=request.user).count(),
+        "recent_drafts": ActionPlanDraft.objects.filter(
+            sku__owner=request.user
+        ).select_related("sku")[:5],
     }
     return render(request, "dashboard/overview.html", context)
 
 
 def decision_center(request, sku_id=None):
-    skus = SKU.objects.select_related("decision_config").all()
+    skus = SKU.objects.filter(owner=request.user).select_related("decision_config")
     selected_sku_id = sku_id or request.GET.get("sku") or (
         skus.first().sku_id if skus.exists() else None
     )
@@ -73,7 +77,7 @@ def decision_center(request, sku_id=None):
         context["no_data"] = True
         return render(request, "dashboard/decision_center.html", context)
 
-    sku = get_object_or_404(SKU, pk=selected_sku_id)
+    sku = get_object_or_404(SKU, pk=selected_sku_id, owner=request.user)
     overrides = _parse_overrides(request)
 
     result = Agent().run(sku, overrides=overrides)
@@ -99,9 +103,9 @@ def decision_center(request, sku_id=None):
 
 
 def product_list(request):
-    products = SKU.objects.select_related("decision_config").prefetch_related(
-        "observations"
-    )
+    products = SKU.objects.filter(owner=request.user).select_related(
+        "decision_config"
+    ).prefetch_related("observations")
     rows = []
     for product in products:
         latest = product.observations.order_by("-timestamp").first()
@@ -114,7 +118,9 @@ def product_list(request):
 
 
 def product_detail(request, sku_id):
-    product = get_object_or_404(SKU.objects.select_related("decision_config"), pk=sku_id)
+    product = get_object_or_404(
+        SKU.objects.select_related("decision_config"), pk=sku_id, owner=request.user
+    )
     latest = product.observations.order_by("-timestamp").first()
     recent_drafts = product.action_plan_drafts.all()[:5]
     return render(
@@ -135,7 +141,9 @@ def product_create(request):
     config_form = DecisionConfigForm(request.POST or None)
     if request.method == "POST" and sku_form.is_valid() and config_form.is_valid():
         with transaction.atomic():
-            product = sku_form.save()
+            product = sku_form.save(commit=False)
+            product.owner = request.user
+            product.save()
             config = config_form.save(commit=False)
             config.sku = product
             config.save()
@@ -156,7 +164,9 @@ def product_create(request):
 
 @login_required
 def product_edit(request, sku_id):
-    product = get_object_or_404(SKU.objects.select_related("decision_config"), pk=sku_id)
+    product = get_object_or_404(
+        SKU.objects.select_related("decision_config"), pk=sku_id, owner=request.user
+    )
     sku_form = SKUForm(request.POST or None, instance=product)
     sku_form.fields["sku_id"].disabled = True
     config_form = DecisionConfigForm(
@@ -183,7 +193,9 @@ def product_edit(request, sku_id):
 
 
 def plan_list(request):
-    drafts = ActionPlanDraft.objects.select_related("sku").all()
+    drafts = ActionPlanDraft.objects.filter(sku__owner=request.user).select_related(
+        "sku"
+    )
     return render(
         request,
         "dashboard/plans.html",
@@ -240,7 +252,7 @@ def approve_plan(request, sku_id):
     if request.method != "POST":
         return redirect("dashboard:decision_center", sku_id=sku_id)
 
-    sku = get_object_or_404(SKU, pk=sku_id)
+    sku = get_object_or_404(SKU, pk=sku_id, owner=request.user)
     # Persist the exact scenario the user reviewed. Without forwarding these
     # values, approving a what-if result would silently save the default plan.
     overrides = _parse_overrides(request)

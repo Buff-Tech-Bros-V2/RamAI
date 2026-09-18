@@ -59,7 +59,7 @@ def chart_data(request):
     if not sku_id:
         return JsonResponse({"error": "sku parameter required"}, status=400)
 
-    sku = get_object_or_404(SKU, pk=sku_id)
+    sku = get_object_or_404(SKU, pk=sku_id, owner=request.user)
     overrides = _parse_overrides(request)
     result = Agent().run(sku, overrides=overrides)
 
@@ -93,7 +93,7 @@ def dashboard_partial(request):
     if not sku_id:
         return render(request, "dashboard/_partials/empty_state.html")
 
-    sku = get_object_or_404(SKU, pk=sku_id)
+    sku = get_object_or_404(SKU, pk=sku_id, owner=request.user)
     overrides = _parse_overrides(request)
     result = Agent().run(sku, overrides=overrides)
 
@@ -119,7 +119,7 @@ def whatif_recalculate(request):
     if not sku_id:
         return JsonResponse({"error": "sku parameter required"}, status=400)
 
-    sku = get_object_or_404(SKU, pk=sku_id)
+    sku = get_object_or_404(SKU, pk=sku_id, owner=request.user)
     overrides = _parse_overrides(request)
     result = Agent().run(sku, overrides=overrides)
 
@@ -147,7 +147,7 @@ def explanation_partial(request, sku_id):
     call happens when the user presses "Analisis" -- not on every page load.
     POST-only so a browser prefetch or a refresh cannot spend the quota.
     """
-    sku = get_object_or_404(SKU, pk=sku_id)
+    sku = get_object_or_404(SKU, pk=sku_id, owner=request.user)
     overrides = _parse_overrides(request)
 
     context = {
