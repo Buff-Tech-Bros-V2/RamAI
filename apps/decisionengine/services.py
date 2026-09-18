@@ -19,6 +19,8 @@ the PRD).
 from dataclasses import replace
 from datetime import timedelta
 
+from django.db.models import Sum
+
 from apps.forecasting.dataclasses import ForecastOutput
 from apps.skus.models import DecisionConfig, SKU
 
@@ -33,6 +35,18 @@ DELAY_RISK_FRACTION = {
     "STAGED_COMMITMENT": 0.05,
     "WAIT": 0.15,
 }
+
+# PRD 11 lists shipping-failure, return and holding costs as explicit terms of
+# the objective, but PRD 9.2's decision configuration carries no parameters for
+# any of them. PRD 11 settles that case itself: "Jika parameter ekonomi belum
+# tersedia, simulator menggunakan asumsi yang ditampilkan di UI."
+#
+# Cancellation, delivery-failure and return rates are therefore measured from
+# the SKU's own history rather than assumed -- PRD 9.1 records every fate an
+# order can have. Only the holding rate, which no table records, falls back to
+# the stated assumption below. Both paths are reported in `assumptions`.
+FULFILMENT_RATE_WINDOW_HOURS = 24 * 30
+HOLDING_COST_RATE_PER_DAY = 0.001  # share of unit_variable_cost, per unit, per day
 
 
 class DecisionEngine:
@@ -148,6 +162,8 @@ class DecisionEngine:
         )
         effective_salvage = 0.0 if residual_spoils else salvage_value_per_unit
 
+        fulfilment_rates = self._fulfilment_rates(sku, now)
+
         candidates = [
             self._score_candidate(
                 action="COMMIT_NOW",
@@ -156,6 +172,8 @@ class DecisionEngine:
                 reevaluate_at=deadline,
                 demand_p50=demand_p50,
                 current_stock=current_stock,
+                fulfilment_rates=fulfilment_rates,
+                horizon_days=horizon_days,
                 unit_selling_price=unit_selling_price,
                 unit_variable_cost=unit_variable_cost,
                 salvage_value_per_unit=effective_salvage,
@@ -169,6 +187,8 @@ class DecisionEngine:
                 reevaluate_at=midpoint,
                 demand_p50=demand_p50,
                 current_stock=current_stock,
+                fulfilment_rates=fulfilment_rates,
+                horizon_days=horizon_days,
                 unit_selling_price=unit_selling_price,
                 unit_variable_cost=unit_variable_cost,
                 salvage_value_per_unit=effective_salvage,
@@ -185,6 +205,8 @@ class DecisionEngine:
                 reevaluate_at=deadline,
                 demand_p50=demand_p50,
                 current_stock=current_stock,
+                fulfilment_rates=fulfilment_rates,
+                horizon_days=horizon_days,
                 unit_selling_price=unit_selling_price,
                 unit_variable_cost=unit_variable_cost,
                 salvage_value_per_unit=effective_salvage,
@@ -204,7 +226,7 @@ class DecisionEngine:
                 action="NO_BUY_NEEDED" if gap_p90 <= 0 else "NO_BUY_POSSIBLE",
                 reevaluate_at=deadline,
             )
-            alternatives = []
+            alternatives = candidates[1:]
         else:
             recommended = max(candidates, key=lambda c: c.expected_contribution)
             alternatives = [c for c in candidates if c is not recommended]
@@ -272,6 +294,24 @@ class DecisionEngine:
                     f"Rp{salvage_value_per_unit:,.0f}/unit."
                 )
 
+        # PRD 11 requires every economic assumption to be visible in the UI.
+        if fulfilment_rates["measured"]:
+            assumptions.append(
+                f"Rate pemenuhan dari histori {FULFILMENT_RATE_WINDOW_HOURS / 24:.0f} hari "
+                f"terakhir: batal sebelum kirim {fulfilment_rates['cancel_rate']:.1%}, "
+                f"gagal kirim {fulfilment_rates['delivery_failure_rate']:.1%}, "
+                f"retur {fulfilment_rates['return_rate']:.1%}."
+            )
+        else:
+            assumptions.append(
+                "Belum ada histori order untuk mengukur rate batal/gagal kirim/retur; "
+                "ketiganya dianggap 0%."
+            )
+        assumptions.append(
+            f"Biaya simpan {HOLDING_COST_RATE_PER_DAY:.1%} dari biaya per unit per hari "
+            "(asumsi placeholder: tidak ada parameter biaya simpan di konfigurasi)."
+        )
+
         if material_per_unit:
             assumptions.append(
                 f"Kebutuhan material {material_per_unit:g} per unit; total per opsi "
@@ -291,6 +331,39 @@ class DecisionEngine:
             assumptions=assumptions,
         )
 
+    @staticmethod
+    def _fulfilment_rates(sku: SKU, now) -> dict:
+        """Measure cancel / delivery-failure / return rates from PRD 9.1 history.
+
+        PRD 6.2: these affect expected contribution, they never reduce
+        fulfilment demand -- so they are money-side only and the committed
+        quantities stay untouched.
+        """
+        since = now - timedelta(hours=FULFILMENT_RATE_WINDOW_HOURS)
+        totals = sku.observations.filter(
+            timestamp__lte=now, timestamp__gte=since
+        ).aggregate(
+            created=Sum("orders_created"),
+            cancelled=Sum("orders_cancelled_pre_ship"),
+            shipped=Sum("orders_shipped"),
+            delivered=Sum("orders_delivered"),
+            returned=Sum("orders_returned"),
+        )
+        created, cancelled, shipped, delivered, returned = (
+            totals[key] or 0
+            for key in ("created", "cancelled", "shipped", "delivered", "returned")
+        )
+
+        def share(part, whole) -> float:
+            return min(max(part / whole, 0.0), 1.0) if whole else 0.0
+
+        return {
+            "cancel_rate": share(cancelled, created),
+            "delivery_failure_rate": share(shipped - delivered, shipped),
+            "return_rate": share(returned, delivered),
+            "measured": created > 0,
+        }
+
     def _score_candidate(
         self,
         action: str,
@@ -303,6 +376,8 @@ class DecisionEngine:
         unit_variable_cost: float,
         salvage_value_per_unit: float,
         delay_risk: float,
+        fulfilment_rates: dict,
+        horizon_days: float,
         material_per_unit: float | None = None,
     ) -> ActionCandidate:
         committed_total = commit_now_units + commit_later_units
@@ -326,12 +401,66 @@ class DecisionEngine:
         lost_units = max(unmet_demand - delivered, 0)
         residual_units = max(committed_total - delivered, 0)
 
-        revenue = delivered * unit_selling_price
-        variable_cost = committed_total * unit_variable_cost
-        residual_cost = residual_units * (unit_variable_cost - salvage_value_per_unit)
+        # PRD 6.2 / 11: cancellations, failed deliveries and returns move money,
+        # never fulfilment demand -- so they thin out the units that actually
+        # turn into `successful_sales` without changing what was committed.
+        cancel_rate = fulfilment_rates["cancel_rate"]
+        delivery_failure_rate = fulfilment_rates["delivery_failure_rate"]
+        return_rate = fulfilment_rates["return_rate"]
+
+        cancelled_units = delivered * cancel_rate
+        shipped_units = delivered - cancelled_units
+        failed_delivery_units = shipped_units * delivery_failure_rate
+        arrived_units = shipped_units - failed_delivery_units
+        returned_units = arrived_units * return_rate
+        successful_sales = arrived_units - returned_units
+
+        # PRD 11: "Biaya tidak boleh dihitung dua kali." Every committed unit is
+        # charged its procurement cost exactly once, here and nowhere else. What
+        # separates the outcomes is how much value comes back afterwards:
+        #   sold        -> selling price
+        #   returned    -> goods back on the shelf, worth their terminal value
+        #   cancelled   -> never shipped, still on the shelf
+        #   unsold      -> ending inventory, PRD 11's "explicit terminal value"
+        #   lost in transit -> nothing recovered; that IS the shipping-failure cost
+        delivered_revenue = successful_sales * unit_selling_price
+        procurement_cost = committed_total * unit_variable_cost
+        recovered_units = cancelled_units + returned_units + residual_units
+        terminal_value = recovered_units * salvage_value_per_unit
+
+        # Ending inventory (FR-O04 / PRD 16.2): what is still on the shelf once
+        # the horizon closes. Units leave for good only by being sold or lost in
+        # transit; returns and cancellations come back.
+        ending_inventory_units = max(
+            current_stock
+            + committed_total
+            - served_from_stock
+            - successful_sales
+            - failed_delivery_units,
+            0.0,
+        )
+        # Holding is charged only on the inventory this decision creates. Stock
+        # that was already on the shelf is sunk: it earns this decision no
+        # revenue, so it must not be charged its carrying cost here either --
+        # and since that cost is identical across all three candidates it never
+        # changes the ranking, it would only push "buy nothing" below zero.
+        holding_cost = (
+            (committed_total + residual_units)
+            / 2
+            * unit_variable_cost
+            * HOLDING_COST_RATE_PER_DAY
+            * horizon_days
+        )
+
         lost_sales_penalty = lost_units * (unit_selling_price - unit_variable_cost) * 0.5
 
-        expected_contribution = revenue - variable_cost - residual_cost - lost_sales_penalty
+        expected_contribution = (
+            delivered_revenue
+            - procurement_cost
+            + terminal_value
+            - holding_cost
+            - lost_sales_penalty
+        )
         # Fill rate answers "how much demand gets served", so it counts both
         # sources -- unlike contribution, which counts only new units.
         fill_rate = (
@@ -349,6 +478,7 @@ class DecisionEngine:
             expected_fill_rate=round(fill_rate, 2),
             expected_lost_units=round(lost_units, 1),
             residual_stock_risk_units=round(residual_units, 1),
+            ending_inventory_units=round(ending_inventory_units, 1),
             required_material=(
                 round(committed_total * material_per_unit, 2)
                 if material_per_unit

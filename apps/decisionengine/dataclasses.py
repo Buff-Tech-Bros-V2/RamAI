@@ -19,6 +19,10 @@ class ActionCandidate:
     expected_fill_rate: float
     expected_lost_units: float
     residual_stock_risk_units: float
+    # On-shelf units once the horizon closes (FR-O04 / PRD 16.2). Unlike
+    # residual-stock risk, which counts only the newly committed units that go
+    # unsold, this includes whatever was already in stock.
+    ending_inventory_units: float
     # Total material consumed by this commitment (units x
     # DecisionConfig.material_per_unit). None when the SKU has no material
     # profile configured.

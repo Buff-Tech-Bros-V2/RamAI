@@ -66,7 +66,8 @@
             <div><span>Disiapkan sekarang</span><strong>{{ rec.commit_now_units }} unit</strong></div>
             <div><span>Tambahan menyusul</span><strong>{{ rec.commit_later_units }} unit</strong></div>
             <div><span>Modal dibutuhkan</span><strong>Rp{{ rec.required_capital|floatformat:0|intcomma }}</strong></div>
-            <div><span>Perkiraan untung kotor</span><strong>Rp{{ rec.expected_contribution|floatformat:0|intcomma }}</strong></div>
+            <div><span>Perkiraan untung</span><strong>Rp{{ rec.expected_contribution|floatformat:0|intcomma }}</strong></div>
+            <div><span>Stok akhir</span><strong>{{ rec.ending_inventory_units|floatformat:0 }} unit</strong></div>
             {% if rec.required_material %}<div><span>Bahan yang dibutuhkan</span><strong>{{ rec.required_material|floatformat:"-2" }}</strong></div>{% endif %}
         </div>
         <div class="recommendation-footer">
@@ -93,7 +94,6 @@
     <article class="key-metric animate-in"><span class="metric-index">03</span><div><span>Batas keputusan</span><strong>{{ result.decision.deadline|date:"d M, H:i" }}</strong><small>{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }} jam lagi</small></div></article>
 </section>
 
-{% if result.decision.alternatives %}
 <section class="content-section" aria-labelledby="options-title">
     <div class="section-heading">
         <div><div class="eyebrow">Bandingkan sebelum memilih</div><h2 id="options-title">Tiga pilihan tindakan</h2></div>
@@ -103,8 +103,10 @@
         {% include "dashboard/_action_card.html" with candidate=rec is_recommended=True %}
         {% for alt in result.decision.alternatives %}{% include "dashboard/_action_card.html" with candidate=alt is_recommended=False %}{% endfor %}
     </div>
+    {% if rec.action == "NO_BUY_NEEDED" or rec.action == "NO_BUY_POSSIBLE" %}
+    <p class="options-note">Ketiga opsi keluar di angka yang sama: tidak ada batch yang {% if rec.action == "NO_BUY_POSSIBLE" %}bisa{% else %}perlu{% endif %} dibeli, jadi tidak ada yang perlu dibandingkan.</p>
+    {% endif %}
 </section>
-{% endif %}
 
 <section id="forecast-section" class="content-section">
     <div class="section-heading">

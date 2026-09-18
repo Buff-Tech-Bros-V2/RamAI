@@ -83,13 +83,15 @@ class DummyLLMExplainer(LLMExplainer):
         reasons = [
             f"- {decision.surge_persistence_48h * 100:.0f}% skenario menunjukkan demand "
             "kemungkinan masih di atas baseline dalam 48 jam.",
-            f"- Perkiraan untung kotor Rp{rec.expected_contribution:,.0f} dengan "
+            f"- Perkiraan untung Rp{rec.expected_contribution:,.0f} dengan "
             f"{rec.expected_fill_rate * 100:.0f}% permintaan terpenuhi.",
+            f"- Stok akhir setelah horizon {rec.ending_inventory_units:.0f} unit, "
+            f"risiko stok tersisa {rec.residual_stock_risk_units:.0f} unit.",
         ]
         for alt in decision.alternatives:
             alt_label = ACTION_LABELS.get(alt.action, alt.action)
             reasons.append(
-                f"- Alternatif '{alt_label}': perkiraan untung kotor "
+                f"- Alternatif '{alt_label}': perkiraan untung "
                 f"Rp{alt.expected_contribution:,.0f}, penjualan berisiko hilang "
                 f"{alt.expected_lost_units:.0f} unit, risiko stok tersisa "
                 f"{alt.residual_stock_risk_units:.0f} unit."
@@ -176,6 +178,7 @@ DATA KEPUTUSAN TERVERIFIKASI:
 - Permintaan yang terpenuhi: {rec.expected_fill_rate * 100:.0f}%
 - Penjualan berisiko hilang: {rec.expected_lost_units:.0f} unit
 - Risiko barang sisa: {rec.residual_stock_risk_units:.0f} unit
+- Stok akhir setelah horizon: {rec.ending_inventory_units:.0f} unit
 - Kemungkinan permintaan tetap ramai 48 jam ke depan: {packet.decision.surge_persistence_48h * 100:.0f}%
 - Tingkat keyakinan sinyal data: {packet.decision.confidence}
 

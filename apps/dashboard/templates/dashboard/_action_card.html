@@ -30,9 +30,10 @@
         <summary>Lihat risiko dan detail</summary>
         <div class="action-details-body">
             <div><span>Tambahan menyusul</span><strong>{{ candidate.commit_later_units }} unit</strong></div>
-            <div><span>Perkiraan untung kotor</span><strong>Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}</strong></div>
+            <div><span>Perkiraan untung</span><strong>Rp{{ candidate.expected_contribution|floatformat:0|intcomma }}</strong></div>
             <div><span>Penjualan berisiko hilang</span><strong class="risk">{{ candidate.expected_lost_units|floatformat:0 }} unit</strong></div>
             <div><span>Risiko stok tersisa</span><strong class="risk">{{ candidate.residual_stock_risk_units|floatformat:0 }} unit</strong></div>
+            <div><span>Stok akhir</span><strong>{{ candidate.ending_inventory_units|floatformat:0 }} unit</strong></div>
             {% if candidate.required_material %}<div><span>Bahan yang dibutuhkan</span><strong>{{ candidate.required_material|floatformat:"-2" }}</strong></div>{% endif %}
             <div><span>Evaluasi kembali</span><strong>{{ candidate.reevaluate_at|date:"d M, H:i" }}</strong></div>
         </div>

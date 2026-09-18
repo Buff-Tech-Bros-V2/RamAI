@@ -313,6 +313,7 @@ td,th,.stat-value,.metric-value{font-variant-numeric:tabular-nums}
 .ai-heading strong{font-size:14px;color:var(--ram-ink-900)}
 .ai-copy{white-space:pre-wrap;font-size:13px;line-height:1.75;color:var(--ram-ink-700);padding:20px 0;flex:1}
 .ai-trust-note{font-size:10px;line-height:1.55;color:var(--ram-muted-500);padding:11px 12px;background:var(--ram-bg-light);border-radius:var(--radius-md)}
+.options-note{margin:14px 0 0;font-size:12px;line-height:1.6;color:var(--ram-muted-500)}
 .ai-idle{flex:1;display:flex;flex-direction:column;justify-content:center;gap:14px;padding:26px 0}
 .ai-analyze-form{display:flex;flex-direction:column;align-items:flex-start;gap:14px}
 .ai-analyze-form.htmx-request{display:none}
