@@ -76,40 +76,40 @@ class DummyLLMExplainer(LLMExplainer):
 
         headline = f"Rekomendasi: {action_label}"
         if rec.commit_now_units:
-            headline += f", {rec.commit_now_units} unit sekarang"
+            headline += f", **{rec.commit_now_units} unit** sekarang"
         if rec.commit_later_units:
-            headline += f" dan {rec.commit_later_units} unit menyusul"
-        headline += f". Evaluasi ulang pukul {rec.reevaluate_at:%H:%M}."
+            headline += f" dan **{rec.commit_later_units} unit** menyusul"
+        headline += f". Evaluasi ulang pukul **{rec.reevaluate_at:%H:%M} WIB**."
 
         reasons = [
-            f"- {decision.surge_persistence_48h * 100:.0f}% skenario menunjukkan demand "
+            f"- **{decision.surge_persistence_48h * 100:.0f}% skenario** menunjukkan demand "
             "kemungkinan masih di atas baseline dalam 48 jam.",
-            f"- Perkiraan untung Rp{rec.expected_contribution:,.0f} dengan "
-            f"{rec.expected_fill_rate * 100:.0f}% permintaan terpenuhi.",
-            f"- Stok akhir setelah horizon {rec.ending_inventory_units:.0f} unit, "
-            f"risiko stok tersisa {rec.residual_stock_risk_units:.0f} unit.",
+            f"- Perkiraan untung **Rp{rec.expected_contribution:,.0f}** dengan "
+            f"**{rec.expected_fill_rate * 100:.0f}%** permintaan terpenuhi.",
+            f"- Stok akhir setelah horizon **{rec.ending_inventory_units:.0f} unit**, "
+            f"risiko stok tersisa **{rec.residual_stock_risk_units:.0f} unit**.",
         ]
         for alt in decision.alternatives:
             alt_label = ACTION_LABELS.get(alt.action, alt.action)
             reasons.append(
-                f"- Alternatif '{alt_label}': perkiraan untung "
-                f"Rp{alt.expected_contribution:,.0f}, penjualan berisiko hilang "
-                f"{alt.expected_lost_units:.0f} unit, risiko stok tersisa "
-                f"{alt.residual_stock_risk_units:.0f} unit."
+                f"- Alternatif **'{alt_label}'**: perkiraan untung "
+                f"**Rp{alt.expected_contribution:,.0f}**, penjualan berisiko hilang "
+                f"**{alt.expected_lost_units:.0f} unit**, risiko stok tersisa "
+                f"**{alt.residual_stock_risk_units:.0f} unit**."
             )
 
         assumptions = "\n".join(f"- {a}" for a in decision.assumptions)
 
         warnings_block = ""
         if packet.warnings:
-            warnings_block = "\n\nPeringatan:\n" + "\n".join(
+            warnings_block = "\n\n**Peringatan Data:**\n\n" + "\n".join(
                 f"- {w}" for w in packet.warnings
             )
 
         return (
-            f"{headline}\n\n"
-            f"Mengapa:\n" + "\n".join(reasons) + "\n\n"
-            f"Asumsi utama:\n{assumptions}"
+            f"### {headline}\n\n"
+            f"**Mengapa Rekomendasi Ini Paling Tepat:**\n\n" + "\n".join(reasons) + "\n\n"
+            f"**Asumsi Utama & Batasan Operasional:**\n\n{assumptions}"
             f"{warnings_block}"
         )
 
@@ -195,11 +195,11 @@ CATATAN DATA / PERINGATAN:
 ATURAN KETAT PENULISAN (COMPLIANCE):
 1. HANYA gunakan angka dan data di atas. DILARANG membuat angka perkiraan atau asumsi biaya baru.
 1b. Tulis untuk pemilik toko, bukan analis. DILARANG memakai istilah teknis seperti "commit", "fill rate", "lost sales", "SKU", "forecast horizon", atau "decision engine" -- pakai padanan sehari-hari (siapkan stok, permintaan terpenuhi, penjualan berisiko hilang, produk, jangka waktu, RamAI).
-2. Tuliskan dengan format yang rapi:
-   - Kalimat pembuka rekomendasi yang tegas.
-   - Poin "Mengapa Rekomendasi Ini Paling Tepat" (sorot persistensi lonjakan dan perbandingan keuntungan vs risiko barang nyisa).
-   - Ringkasan komparasi singkat terhadap opsi alternatif.
-   - Poin penting waktu evaluasi ulang berikutnya sebelum batas deadline.
+2. Tuliskan dalam format Markdown yang rapi dan terstruktur:
+   - Gunakan heading Markdown (`###`) untuk kalimat pembuka rekomendasi.
+   - Gunakan sub-heading tebal (`**Mengapa Rekomendasi Ini Paling Tepat:**`, `**Perbandingan Opsi Alternatif:**`, `**Asumsi Utama & Batasan:**`).
+   - Gunakan daftar butir Markdown (`- `) dengan jarak baris kosong sebelum daftar agar terformat rapi.
+   - Gunakan penekanan teks tebal (`**...**`) pada angka-angka kunci (unit stok, rupiah keuntungan, dan persentase).
 """
 
     def explain(self, packet: ExplanationPacket) -> str:

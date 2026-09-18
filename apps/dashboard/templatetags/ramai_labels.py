@@ -5,7 +5,14 @@ reading the dashboard should never see either the enum or the word "commit".
 Templates render the enum through these filters instead.
 """
 
+import re
 from django import template
+from django.utils.safestring import mark_safe
+
+try:
+    import markdown as md_lib
+except ImportError:
+    md_lib = None
 
 register = template.Library()
 
@@ -37,3 +44,20 @@ def action_label(value):
 @register.filter
 def action_label_short(value):
     return ACTION_LABELS_SHORT.get(str(value), "Belum tersedia")
+
+
+@register.filter(name="render_markdown")
+def render_markdown(value):
+    if not value:
+        return ""
+    text = str(value).strip()
+    # Ensure lists following headers or text have a preceding newline for standard markdown parsers
+    text = re.sub(r'([^\n])\n([*-] |\d+\. )', r'\1\n\n\2', text)
+    if md_lib:
+        html = md_lib.markdown(
+            text,
+            extensions=["extra", "nl2br", "sane_lists"],
+        )
+        return mark_safe(html)
+    from django.utils.html import escape, linebreaks
+    return mark_safe(linebreaks(escape(text)))

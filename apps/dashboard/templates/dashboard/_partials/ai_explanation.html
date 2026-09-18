@@ -1,10 +1,11 @@
+{% load ramai_labels %}
 <aside class="ai-explanation animate-in" id="ai-explanation">
     <div class="ai-heading">
         <span class="ai-mark">AI</span>
         <div><span>Penjelasan RamAI</span><strong>Kenapa rekomendasi ini?</strong></div>
     </div>
     {% if explanation_text %}
-    <div class="ai-copy">{{ explanation_text }}</div>
+    <div class="ai-copy markdown-body">{{ explanation_text|render_markdown }}</div>
     <div class="ai-trust-note">Angka berasal dari forecast dan mesin keputusan RamAI. AI hanya membantu menjelaskan hasilnya.</div>
     {% else %}
     <div class="ai-idle">
@@ -21,8 +22,8 @@
             The explanation must describe the same scenario shown on screen,
             so the active what-if values ride along with the request.
             {% endcomment %}
-            <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|default_if_none:'' }}">
-            <input type="hidden" name="capital" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit }}">
+            <input type="hidden" name="capacity_minutes" value="{{ whatif.daily_capacity_minutes|default:decision_config.daily_capacity_minutes|default_if_none:''|floatformat:0 }}">
+            <input type="hidden" name="capital" value="{{ whatif.working_capital_limit|default:decision_config.working_capital_limit|floatformat:0 }}">
             <input type="hidden" name="window_hours" value="{{ whatif.decision_window_hours|default:decision_config.decision_window_hours|floatformat:0 }}">
             <p class="ai-idle-copy">Angka rekomendasi di samping sudah siap. Jalankan analisis untuk meminta RamAI menjelaskan alasannya.</p>
             <button type="submit" class="ram-btn ram-btn-primary">
